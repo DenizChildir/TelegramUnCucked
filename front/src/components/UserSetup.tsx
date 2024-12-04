@@ -5,6 +5,7 @@ import { generateShortId, saveUser, getRecentUsers, StoredUser } from '../store/
 
 export const UserSetup = () => {
     const [userId, setUserId] = useState('');
+    const [selectedId, setSelectedId] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const dispatch = useAppDispatch();
     const recentUsers = getRecentUsers();
@@ -12,6 +13,7 @@ export const UserSetup = () => {
     const generateNewId = () => {
         const newId = generateShortId();
         setUserId(newId);
+        setSelectedId(newId);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -23,8 +25,8 @@ export const UserSetup = () => {
     };
 
     const selectUser = (user: StoredUser) => {
-        saveUser(user.id);
-        dispatch(setCurrentUser(user.id));
+        setUserId(user.id);
+        setSelectedId(user.id);
     };
 
     return (
@@ -42,6 +44,19 @@ export const UserSetup = () => {
                 color: '#333',
                 fontSize: '24px'
             }}>Setup User ID</h2>
+
+            {selectedId && (
+                <div style={{
+                    textAlign: 'center',
+                    marginBottom: '20px',
+                    padding: '10px',
+                    backgroundColor: '#e9ecef',
+                    borderRadius: '4px'
+                }}>
+                    <span style={{ color: '#666' }}>Selected ID: </span>
+                    <span style={{ fontWeight: 'bold', color: '#007bff' }}>{selectedId}</span>
+                </div>
+            )}
 
             {recentUsers.length > 0 && (
                 <div style={{
@@ -63,14 +78,12 @@ export const UserSetup = () => {
                                 onClick={() => selectUser(user)}
                                 style={{
                                     padding: '8px 16px',
-                                    backgroundColor: '#e9ecef',
+                                    backgroundColor: user.id === selectedId ? '#007bff' : '#e9ecef',
+                                    color: user.id === selectedId ? 'white' : 'black',
                                     border: 'none',
                                     borderRadius: '4px',
                                     cursor: 'pointer',
-                                    transition: 'background-color 0.2s',
-                                    ':hover': {
-                                        backgroundColor: '#dee2e6'
-                                    }
+                                    transition: 'all 0.2s'
                                 }}
                             >
                                 {user.id}
@@ -88,7 +101,10 @@ export const UserSetup = () => {
                 <input
                     type="text"
                     value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
+                    onChange={(e) => {
+                        setUserId(e.target.value);
+                        setSelectedId(e.target.value);
+                    }}
                     placeholder="Enter user ID"
                     style={{
                         padding: '10px',

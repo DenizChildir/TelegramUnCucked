@@ -27,7 +27,6 @@ export const Chat = () => {
                 savedMessages.forEach(msg => dispatch(addMessage(msg)));
             }
 
-            // Connect to WebSocket
             const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
             wsRef.current = ws;
 
@@ -51,7 +50,6 @@ export const Chat = () => {
                 console.log('WebSocket Disconnected');
             };
 
-            // Check other user's status periodically
             const statusInterval = setInterval(async () => {
                 try {
                     const response = await fetch(`http://localhost:3000/status/${connectedToUser}`);
@@ -98,7 +96,7 @@ export const Chat = () => {
         if (wsRef.current) {
             wsRef.current.close();
         }
-        dispatch(clearChat());  // This now only clears messages and connectedToUser
+        dispatch(clearChat());
     };
 
     const formatTime = (timestamp: string) => {
@@ -109,14 +107,16 @@ export const Chat = () => {
     };
 
     return (
-        <div>
+        <div style={{ padding: '20px' }}>
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 marginBottom: '20px'
             }}>
-                <h2>Chat with User: {connectedToUser}</h2>
+                <div>
+                    <h2>Chat: {currentUserId} → {connectedToUser}</h2>
+                </div>
                 <button
                     onClick={handleDisconnect}
                     style={{
@@ -139,7 +139,7 @@ export const Chat = () => {
                 padding: '10px',
                 marginBottom: '20px'
             }}>
-            {messages.map((message) => (
+                {messages.map((message) => (
                     <div
                         key={message.id}
                         style={{
