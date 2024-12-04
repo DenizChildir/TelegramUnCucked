@@ -98,7 +98,7 @@ export const Chat = () => {
         if (wsRef.current) {
             wsRef.current.close();
         }
-        dispatch(clearChat());
+        dispatch(clearChat());  // This now only clears messages and connectedToUser
     };
 
     const formatTime = (timestamp: string) => {
@@ -119,7 +119,14 @@ export const Chat = () => {
                 <h2>Chat with User: {connectedToUser}</h2>
                 <button
                     onClick={handleDisconnect}
-                    style={{ padding: '8px 16px' }}
+                    style={{
+                        padding: '8px 16px',
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                    }}
                 >
                     Disconnect
                 </button>
@@ -132,7 +139,7 @@ export const Chat = () => {
                 padding: '10px',
                 marginBottom: '20px'
             }}>
-                {messages.map((message) => (
+            {messages.map((message) => (
                     <div
                         key={message.id}
                         style={{

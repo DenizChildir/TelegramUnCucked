@@ -28,18 +28,50 @@ export const UserSetup = () => {
     };
 
     return (
-        <div className="p-4">
-            <h2 className="text-xl mb-4">Setup User ID</h2>
+        <div style={{
+            maxWidth: '400px',
+            margin: '40px auto',
+            padding: '20px',
+            borderRadius: '8px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            backgroundColor: 'white'
+        }}>
+            <h2 style={{
+                textAlign: 'center',
+                marginBottom: '24px',
+                color: '#333',
+                fontSize: '24px'
+            }}>Setup User ID</h2>
 
             {recentUsers.length > 0 && (
-                <div className="mb-4">
-                    <h3 className="text-lg mb-2">Recent Users</h3>
-                    <div className="flex gap-2 flex-wrap">
+                <div style={{
+                    marginBottom: '24px'
+                }}>
+                    <h3 style={{
+                        fontSize: '16px',
+                        color: '#666',
+                        marginBottom: '12px'
+                    }}>Recent Users</h3>
+                    <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        flexWrap: 'wrap'
+                    }}>
                         {recentUsers.map(user => (
                             <button
                                 key={user.id}
                                 onClick={() => selectUser(user)}
-                                className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                                style={{
+                                    padding: '8px 16px',
+                                    backgroundColor: '#e9ecef',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s',
+                                    ':hover': {
+                                        backgroundColor: '#dee2e6'
+                                    }
+                                }}
                             >
                                 {user.id}
                             </button>
@@ -48,29 +80,60 @@ export const UserSetup = () => {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="flex gap-2">
+            <form onSubmit={handleSubmit} style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+            }}>
                 <input
                     type="text"
                     value={userId}
                     onChange={(e) => setUserId(e.target.value)}
                     placeholder="Enter user ID"
-                    className="px-3 py-2 border rounded"
+                    style={{
+                        padding: '10px',
+                        borderRadius: '4px',
+                        border: '1px solid #ccc',
+                        fontSize: '16px'
+                    }}
                 />
-                <button
-                    type="button"
-                    onClick={generateNewId}
-                    disabled={isLoading}
-                    className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                >
-                    Generate ID
-                </button>
-                <button
-                    type="submit"
-                    disabled={!userId.trim()}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                    Connect
-                </button>
+                <div style={{
+                    display: 'flex',
+                    gap: '8px'
+                }}>
+                    <button
+                        type="button"
+                        onClick={generateNewId}
+                        disabled={isLoading}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            backgroundColor: '#e9ecef',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '16px'
+                        }}
+                    >
+                        Generate ID
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={!userId.trim()}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            backgroundColor: '#007bff',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '16px'
+                        }}
+                    >
+                        Connect
+                    </button>
+                </div>
             </form>
         </div>
     );

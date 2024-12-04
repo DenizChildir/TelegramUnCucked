@@ -59,6 +59,8 @@ const messageSlice = createSlice({
         clearChat(state) {
             state.messages = [];
             state.connectedToUser = null;
+            state.currentUserId = null;  // Also clear the current user
+            state.users = {};  // Optionally clear users too
         }
     }
 });
