@@ -1,4 +1,3 @@
-// components/Chat.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import {
@@ -8,6 +7,7 @@ import {
     clearChat
 } from '../store/messageSlice';
 import { Message } from '../types/types';
+import { saveMessage, getMessages, generateShortId } from '../store/storage.ts';
 
 export const Chat = () => {
     const [messageText, setMessageText] = useState('');
@@ -21,6 +21,12 @@ export const Chat = () => {
 
     useEffect(() => {
         if (currentUserId && connectedToUser) {
+            // Load existing messages
+            const savedMessages = getMessages(currentUserId, connectedToUser);
+            if (savedMessages.length > 0) {
+                savedMessages.forEach(msg => dispatch(addMessage(msg)));
+            }
+
             // Connect to WebSocket
             const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
             wsRef.current = ws;
@@ -32,12 +38,10 @@ export const Chat = () => {
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-
                 if (data.content === 'delivered') {
-                    // Handle delivery confirmation
                     dispatch(setMessageDelivered(data.messageId));
                 } else {
-                    // Handle regular message
+                    saveMessage(data);
                     dispatch(addMessage(data));
                 }
             };
@@ -75,7 +79,7 @@ export const Chat = () => {
         if (!messageText.trim() || !wsRef.current) return;
 
         const message: Message = {
-            id: Date.now().toString(),
+            id: generateShortId(),
             fromId: currentUserId!,
             toId: connectedToUser!,
             content: messageText,
@@ -84,6 +88,7 @@ export const Chat = () => {
             readStatus: false
         };
 
+        saveMessage(message);
         wsRef.current.send(JSON.stringify(message));
         dispatch(addMessage(message));
         setMessageText('');

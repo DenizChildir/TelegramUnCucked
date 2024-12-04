@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -43,18 +44,28 @@ func main() {
 
 	app := fiber.New()
 
-	// Add CORS middleware
+	// Add CORS middleware with more permissive settings
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:5173",
+		AllowOrigins: "*", // Allow all origins for development
 		AllowHeaders: "Origin, Content-Type, Accept",
 		AllowMethods: "GET, POST, HEAD, PUT, DELETE, PATCH",
 	}))
 
 	// Routes
+	app.Use("/ws/:id", func(c *fiber.Ctx) error {
+		// Enable WebSocket upgrade for all paths
+		if websocket.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
 	app.Get("/ws/:id", websocket.New(handleWebSocket))
-	app.Get("/generate-id", handleGenerateID) // Changed to GET
+	app.Get("/generate-id", handleGenerateID)
 	app.Get("/status/:id", handleUserStatus)
 
+	log.Printf("Server starting on :3000")
 	log.Fatal(app.Listen(":3000"))
 }
 
@@ -84,10 +95,14 @@ func initDB() {
 }
 
 func handleGenerateID(c *fiber.Ctx) error {
-	// Generate a random ID (using Unix timestamp for simplicity)
-	id := time.Now().UnixNano()
+	// Generate a 4-character ID
+	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 4)
+	for i := range b {
+		b[i] = chars[rand.Intn(len(chars))]
+	}
 	return c.JSON(fiber.Map{
-		"id": id,
+		"id": string(b),
 	})
 }
 
