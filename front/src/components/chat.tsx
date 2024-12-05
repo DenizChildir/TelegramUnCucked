@@ -8,6 +8,7 @@ import {
 } from '../store/messageSlice';
 import { Message } from '../types/types';
 import { saveMessage, getMessages, generateShortId } from '../store/storage.ts';
+import styles from './Chat.module.css';
 
 export const Chat = () => {
     const [messageText, setMessageText] = useState('');
@@ -107,63 +108,35 @@ export const Chat = () => {
     };
 
     return (
-        <div style={{ padding: '20px' }}>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '20px'
-            }}>
+        <div className={styles.chatContainer}>
+            <div className={styles.header}>
                 <div>
-                    <h2>Chat: {currentUserId} → {connectedToUser}</h2>
+                    <h2 className={styles.title}>Chat: {currentUserId} → {connectedToUser}</h2>
                 </div>
                 <button
                     onClick={handleDisconnect}
-                    style={{
-                        padding: '8px 16px',
-                        backgroundColor: '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                    }}
+                    className={styles.disconnectButton}
                 >
                     Disconnect
                 </button>
             </div>
 
-            <div style={{
-                height: '400px',
-                overflowY: 'auto',
-                border: '1px solid #ccc',
-                padding: '10px',
-                marginBottom: '20px'
-            }}>
+            <div className={styles.messagesContainer}>
                 {messages.map((message) => (
                     <div
                         key={message.id}
-                        style={{
-                            marginBottom: '10px',
-                            textAlign: message.fromId === currentUserId ? 'right' : 'left'
-                        }}
+                        className={`${styles.messageWrapper} ${
+                            message.fromId === currentUserId ? styles.messageOutgoing : styles.messageIncoming
+                        }`}
                     >
-                        <div style={{
-                            display: 'inline-block',
-                            maxWidth: '70%',
-                            padding: '8px',
-                            borderRadius: '8px',
-                            backgroundColor: message.fromId === currentUserId ? '#007bff' : '#e9ecef',
-                            color: message.fromId === currentUserId ? 'white' : 'black'
-                        }}>
+                        <div className={`${styles.messageBubble} ${
+                            message.fromId === currentUserId ? styles.messageBubbleOutgoing : styles.messageBubbleIncoming
+                        }`}>
                             <div>{message.content}</div>
-                            <div style={{
-                                fontSize: '0.8em',
-                                marginTop: '4px',
-                                opacity: 0.8
-                            }}>
+                            <div className={styles.messageTime}>
                                 {formatTime(message.timestamp)}
                                 {message.fromId === currentUserId && (
-                                    <span style={{ marginLeft: '5px' }}>
+                                    <span className={styles.messageStatus}>
                                         {message.delivered ? '✓✓' : '✓'}
                                     </span>
                                 )}
@@ -173,32 +146,23 @@ export const Chat = () => {
                 ))}
             </div>
 
-            <form onSubmit={sendMessage}>
-                <div style={{
-                    display: 'flex',
-                    gap: '10px'
-                }}>
-                    <input
-                        type="text"
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        placeholder="Type your message..."
-                        style={{
-                            flex: 1,
-                            padding: '8px'
-                        }}
-                    />
-                    <button
-                        type="submit"
-                        disabled={!isConnected || !messageText.trim()}
-                        style={{
-                            padding: '8px 16px'
-                        }}
-                    >
-                        Send
-                    </button>
-                </div>
+            <form onSubmit={sendMessage} className={styles.inputForm}>
+                <input
+                    type="text"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    placeholder="Type your message..."
+                    className={styles.messageInput}
+                />
+                <button
+                    type="submit"
+                    disabled={!isConnected || !messageText.trim()}
+                    className={styles.sendButton}
+                >
+                    Send
+                </button>
             </form>
         </div>
     );
+
 };

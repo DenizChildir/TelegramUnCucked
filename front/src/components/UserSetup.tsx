@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppDispatch } from '../hooks/redux';
 import { setCurrentUser } from '../store/messageSlice';
 import { generateShortId, saveUser, getRecentUsers, StoredUser } from '../store/storage.ts';
+import styles from './UserSetup.module.css';
 
 export const UserSetup = () => {
     const [userId, setUserId] = useState('');
@@ -30,61 +31,27 @@ export const UserSetup = () => {
     };
 
     return (
-        <div style={{
-            maxWidth: '400px',
-            margin: '40px auto',
-            padding: '20px',
-            borderRadius: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            backgroundColor: 'white'
-        }}>
-            <h2 style={{
-                textAlign: 'center',
-                marginBottom: '24px',
-                color: '#333',
-                fontSize: '24px'
-            }}>Setup User ID</h2>
+        <div className={styles.container}>
+            <h2 className={styles.title}>Setup User ID</h2>
 
             {selectedId && (
-                <div style={{
-                    textAlign: 'center',
-                    marginBottom: '20px',
-                    padding: '10px',
-                    backgroundColor: '#e9ecef',
-                    borderRadius: '4px'
-                }}>
-                    <span style={{ color: '#666' }}>Selected ID: </span>
-                    <span style={{ fontWeight: 'bold', color: '#007bff' }}>{selectedId}</span>
+                <div className={styles.selectedIdContainer}>
+                    <span className={styles.selectedIdLabel}>Selected ID: </span>
+                    <span className={styles.selectedId}>{selectedId}</span>
                 </div>
             )}
 
             {recentUsers.length > 0 && (
-                <div style={{
-                    marginBottom: '24px'
-                }}>
-                    <h3 style={{
-                        fontSize: '16px',
-                        color: '#666',
-                        marginBottom: '12px'
-                    }}>Recent Users</h3>
-                    <div style={{
-                        display: 'flex',
-                        gap: '8px',
-                        flexWrap: 'wrap'
-                    }}>
+                <div className={styles.recentUsersSection}>
+                    <h3 className={styles.recentUsersTitle}>Recent Users</h3>
+                    <div className={styles.recentUsersList}>
                         {recentUsers.map(user => (
                             <button
                                 key={user.id}
                                 onClick={() => selectUser(user)}
-                                style={{
-                                    padding: '8px 16px',
-                                    backgroundColor: user.id === selectedId ? '#007bff' : '#e9ecef',
-                                    color: user.id === selectedId ? 'white' : 'black',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
+                                className={`${styles.userButton} ${
+                                    user.id === selectedId ? styles.userButtonSelected : styles.userButtonUnselected
+                                }`}
                             >
                                 {user.id}
                             </button>
@@ -93,11 +60,7 @@ export const UserSetup = () => {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-            }}>
+            <form onSubmit={handleSubmit} className={styles.form}>
                 <input
                     type="text"
                     value={userId}
@@ -106,46 +69,21 @@ export const UserSetup = () => {
                         setSelectedId(e.target.value);
                     }}
                     placeholder="Enter user ID"
-                    style={{
-                        padding: '10px',
-                        borderRadius: '4px',
-                        border: '1px solid #ccc',
-                        fontSize: '16px'
-                    }}
+                    className={styles.input}
                 />
-                <div style={{
-                    display: 'flex',
-                    gap: '8px'
-                }}>
+                <div className={styles.buttonGroup}>
                     <button
                         type="button"
                         onClick={generateNewId}
                         disabled={isLoading}
-                        style={{
-                            flex: 1,
-                            padding: '10px',
-                            backgroundColor: '#e9ecef',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '16px'
-                        }}
+                        className={styles.generateButton}
                     >
                         Generate ID
                     </button>
                     <button
                         type="submit"
                         disabled={!userId.trim()}
-                        style={{
-                            flex: 1,
-                            padding: '10px',
-                            backgroundColor: '#007bff',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '16px'
-                        }}
+                        className={styles.submitButton}
                     >
                         Connect
                     </button>

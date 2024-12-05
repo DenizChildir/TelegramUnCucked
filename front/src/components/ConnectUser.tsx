@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { setConnectedUser } from '../store/messageSlice';
+import styles from './ConnectUser.module.css';
 
 export const ConnectUser = () => {
     const [targetUserId, setTargetUserId] = useState('');
@@ -24,28 +25,24 @@ export const ConnectUser = () => {
     };
 
     return (
-        <div>
-            <h2>Connect to User</h2>
-            <p>Your ID: {currentUserId}</p>
-            <form onSubmit={handleConnect} style={{ marginTop: '20px' }}>
-                <div>
+        <div className={styles.container}>
+            <h2 className={styles.title}>Connect to User</h2>
+            <div className={styles.userInfo}>
+                Your ID: <span className={styles.userId}>{currentUserId}</span>
+            </div>
+            <form onSubmit={handleConnect} className={styles.form}>
+                <div className={styles.inputGroup}>
                     <input
                         type="text"
                         value={targetUserId}
                         onChange={(e) => setTargetUserId(e.target.value)}
                         placeholder="Enter recipient's user ID"
-                        style={{
-                            padding: '8px',
-                            marginRight: '10px',
-                            width: '200px'
-                        }}
+                        className={styles.input}
                     />
                     <button
                         type="submit"
                         disabled={!targetUserId.trim() || targetUserId === currentUserId}
-                        style={{
-                            padding: '8px 16px'
-                        }}
+                        className={styles.connectButton}
                     >
                         Connect
                     </button>
