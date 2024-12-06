@@ -4,7 +4,8 @@ import { store } from './store/store';
 import { UserSetup } from './components/UserSetup';
 import { Chat } from './components/Chat';
 import { useAppSelector } from './hooks/redux';
-import {ConnectUser} from "./components/ConnectUser.tsx";
+import { ConnectUser } from "./components/ConnectUser";
+import { DataManager } from "./components/DataManagment.tsx";
 
 const AppContent = () => {
     const currentUserId = useAppSelector(state => state.messages.currentUserId);
@@ -12,6 +13,7 @@ const AppContent = () => {
 
     return (
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
+            {currentUserId && <DataManager />}
             {!currentUserId ? (
                 <UserSetup />
             ) : !connectedToUser ? (

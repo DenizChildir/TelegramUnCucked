@@ -1,4 +1,6 @@
 // storage.ts
+import {Message} from "../types/types.ts";
+
 export interface StoredUser {
     id: string;
     lastActive: string;
@@ -81,4 +83,43 @@ export const getRecentUsers = (): StoredUser[] => {
     return storage.users
         .sort((a, b) => new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime())
         .slice(0, 5);  // Keep only 5 most recent users
+};
+export const deleteUserData = (userId: string) => {
+    const storage = getStorageManager();
+
+    // Remove user from recent users
+    storage.users = storage.users.filter(user => user.id !== userId);
+
+    // Remove all messages where user is sender or receiver
+    const newMessages: {[key: string]: Message[]} = {};
+    Object.entries(storage.messages).forEach(([key, messages]) => {
+        const [fromId, toId] = key.split(':');
+        if (fromId !== userId && toId !== userId) {
+            newMessages[key] = messages;
+        }
+    });
+
+    storage.messages = newMessages;
+    saveToStorage(storage);
+};
+
+export const deleteContactHistory = (userId: string, contactId: string) => {
+    const storage = getStorageManager();
+
+    // Remove messages between these users
+    const newMessages: {[key: string]: Message[]} = {};
+    Object.entries(storage.messages).forEach(([key, messages]) => {
+        const [fromId, toId] = key.split(':');
+        if ((fromId !== userId || toId !== contactId) &&
+            (fromId !== contactId || toId !== userId)) {
+            newMessages[key] = messages;
+        }
+    });
+
+    storage.messages = newMessages;
+    saveToStorage(storage);
+};
+
+export const deleteAllUserData = () => {
+    localStorage.removeItem(STORAGE_KEY);
 };
