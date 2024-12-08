@@ -1,5 +1,66 @@
 // storage.ts
-import {Message} from "../types/types.ts";
+import { Message } from "../types/types";
+
+export const saveMessage = (message: Message) => {
+    const storage = getStorageManager();
+    const key = `${message.fromId}:${message.toId}`;
+    const reverseKey = `${message.toId}:${message.fromId}`;
+
+    // Ensure message arrays exist
+    if (!storage.messages[key]) {
+        storage.messages[key] = [];
+    }
+    if (!storage.messages[reverseKey]) {
+        storage.messages[reverseKey] = [];
+    }
+
+    // Check if message already exists in either array
+    const messageExists = storage.messages[key].some(msg => msg.id === message.id) ||
+        storage.messages[reverseKey].some(msg => msg.id === message.id);
+
+    if (!messageExists) {
+        storage.messages[key].push(message);
+        // Only store in reverse key if it's a different conversation
+        if (key !== reverseKey) {
+            storage.messages[reverseKey].push(message);
+        }
+        saveToStorage(storage);
+    }
+};
+
+export const getMessages = (userId1: string, userId2: string): Message[] => {
+    const storage = getStorageManager();
+    const key = `${userId1}:${userId2}`;
+
+    // Get messages and ensure uniqueness by ID
+    const messages = storage.messages[key] || [];
+    const uniqueMessages = Array.from(
+        messages.reduce((map, message) => {
+            if (!map.has(message.id)) {
+                map.set(message.id, message);
+            }
+            return map;
+        }, new Map<string, Message>()).values()
+    );
+
+    return uniqueMessages.sort((a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+};
+
+export const generateShortId = (): string => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    const timestamp = Date.now().toString(36); // Convert timestamp to base36
+
+    // Add 4 random characters
+    for (let i = 0; i < 4; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // Combine timestamp and random string to ensure uniqueness
+    return `${result}-${timestamp}`;
+};
 
 export interface StoredUser {
     id: string;
@@ -13,14 +74,6 @@ export interface StorageManager {
 
 const STORAGE_KEY = 'chat_storage';
 
-export const generateShortId = (): string => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 4; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-};
 
 export const getStorageManager = (): StorageManager => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -32,34 +85,6 @@ export const getStorageManager = (): StorageManager => {
 
 export const saveToStorage = (manager: StorageManager) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(manager));
-};
-
-export const saveMessage = (message: Message) => {
-    const storage = getStorageManager();
-    const key = `${message.fromId}:${message.toId}`;
-    const reverseKey = `${message.toId}:${message.fromId}`;
-
-    if (!storage.messages[key]) {
-        storage.messages[key] = [];
-    }
-    storage.messages[key].push(message);
-
-    // Save reverse reference for easier retrieval
-    if (!storage.messages[reverseKey]) {
-        storage.messages[reverseKey] = [];
-    }
-    storage.messages[reverseKey].push(message);
-
-    saveToStorage(storage);
-};
-
-export const getMessages = (userId1: string, userId2: string): Message[] => {
-    const storage = getStorageManager();
-    const key = `${userId1}:${userId2}`;
-    const messages = storage.messages[key] || [];
-    return messages.sort((a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
 };
 
 export const saveUser = (userId: string) => {

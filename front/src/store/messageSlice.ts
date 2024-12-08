@@ -56,6 +56,10 @@ const messageSlice = createSlice({
                 online: action.payload.online
             };
         },
+        initializeMessages(state, action: PayloadAction<Message[]>) {
+            // Replace all messages with the initial set
+            state.messages = action.payload;
+        },
         clearChat(state) {
             state.messages = [];
             state.connectedToUser = null;
@@ -71,7 +75,8 @@ export const {
     addMessage,
     setMessageDelivered,
     setUserOnlineStatus,
-    clearChat
+    clearChat,
+    initializeMessages
 } = messageSlice.actions;
 
 export default messageSlice.reducer;

@@ -216,11 +216,12 @@ func storeMessage(msg Message) {
 }
 
 func sendOfflineMessages(userID string) {
+	// First, get all undelivered messages
 	query := `
-	SELECT id, from_id, to_id, content, timestamp, delivered, read_status
-	FROM messages
-	WHERE to_id = ? AND delivered = false
-	`
+    SELECT id, from_id, to_id, content, timestamp, delivered, read_status
+    FROM messages
+    WHERE to_id = ? AND delivered = false
+    `
 
 	rows, err := db.Query(query, userID)
 	if err != nil {
@@ -232,6 +233,25 @@ func sendOfflineMessages(userID string) {
 	clientsMux.RLock()
 	recipient := clients[userID]
 	clientsMux.RUnlock()
+
+	// Prepare a transaction for updating multiple messages
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Error starting transaction: %v", err)
+		return
+	}
+
+	updateStmt, err := tx.Prepare(`
+        UPDATE messages
+        SET delivered = true
+        WHERE id = ?
+    `)
+	if err != nil {
+		log.Printf("Error preparing update statement: %v", err)
+		tx.Rollback()
+		return
+	}
+	defer updateStmt.Close()
 
 	for rows.Next() {
 		var msg Message
@@ -257,16 +277,37 @@ func sendOfflineMessages(userID string) {
 				continue
 			}
 
-			// Update message as delivered
-			updateQuery := `
-			UPDATE messages
-			SET delivered = true
-			WHERE id = ?
-			`
-			_, err = db.Exec(updateQuery, msg.ID)
+			// Mark message as delivered within the transaction
+			_, err = updateStmt.Exec(msg.ID)
 			if err != nil {
 				log.Printf("Error updating message status: %v", err)
+				continue
+			}
+
+			// Send delivery confirmation to original sender
+			deliveryConfirmation := Message{
+				ID:        "delivery_" + msg.ID,
+				FromID:    msg.ToID,
+				ToID:      msg.FromID,
+				Content:   "delivered",
+				Timestamp: time.Now(),
+				Delivered: true,
+			}
+
+			clientsMux.RLock()
+			sender := clients[msg.FromID]
+			clientsMux.RUnlock()
+
+			if sender != nil {
+				sender.Conn.WriteJSON(deliveryConfirmation)
 			}
 		}
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %v", err)
+		tx.Rollback()
 	}
 }
