@@ -11,7 +11,6 @@ import { Message } from '../types/types';
 import { saveMessage, getMessages, generateShortId } from '../store/storage';
 import styles from './Chat.module.css';
 
-
 export const Chat = () => {
     const [messageText, setMessageText] = useState('');
     const [isConnected, setIsConnected] = useState(false);
@@ -23,11 +22,20 @@ export const Chat = () => {
     const currentUserId = useAppSelector(state => state.messages.currentUserId);
     const connectedToUser = useAppSelector(state => state.messages.connectedToUser);
     const messages = useAppSelector(state => state.messages.messages);
+    const users = useAppSelector(state => state.messages.users);
+
+    const isUserOnline = connectedToUser ? users[connectedToUser]?.online : false;
+
+    // Filter messages for current conversation
+    const conversationMessages = messages.filter(msg =>
+        (msg.fromId === currentUserId && msg.toId === connectedToUser) ||
+        (msg.fromId === connectedToUser && msg.toId === currentUserId)
+    );
 
     // Scroll to bottom when new messages arrive
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    }, [conversationMessages]);
 
     // Load initial messages
     useEffect(() => {
@@ -44,7 +52,7 @@ export const Chat = () => {
 
     // WebSocket connection
     useEffect(() => {
-        if (currentUserId && connectedToUser) {
+        if (currentUserId) {
             const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
             wsRef.current = ws;
 
@@ -71,15 +79,17 @@ export const Chat = () => {
 
             // Check online status periodically
             const statusInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`http://localhost:3000/status/${connectedToUser}`);
-                    const data = await response.json();
-                    dispatch(setUserOnlineStatus({
-                        userId: connectedToUser,
-                        online: data.online
-                    }));
-                } catch (error) {
-                    console.error('Error checking user status:', error);
+                if (connectedToUser) {
+                    try {
+                        const response = await fetch(`http://localhost:3000/status/${connectedToUser}`);
+                        const data = await response.json();
+                        dispatch(setUserOnlineStatus({
+                            userId: connectedToUser,
+                            online: data.online
+                        }));
+                    } catch (error) {
+                        console.error('Error checking user status:', error);
+                    }
                 }
             }, 5000);
 
@@ -101,12 +111,12 @@ export const Chat = () => {
 
     const sendMessage = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!messageText.trim() || !wsRef.current) return;
+        if (!messageText.trim() || !wsRef.current || !connectedToUser) return;
 
         const message: Message = {
             id: generateShortId(),
             fromId: currentUserId!,
-            toId: connectedToUser!,
+            toId: connectedToUser,
             content: messageText.trim(),
             timestamp: new Date().toISOString(),
             delivered: false,
@@ -133,10 +143,17 @@ export const Chat = () => {
         <div className={styles.chatContainer}>
             <div className={styles.header}>
                 <div className={styles.headerInfo}>
-                    <h2 className={styles.title}>Chat with {connectedToUser}</h2>
-                    <span className={styles.connectionStatus}>
-                        {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
-                    </span>
+                    <div className={styles.userInfo}>
+                        <span className={styles.userLabel}>Your ID:</span>
+                        <span className={styles.userId}>{currentUserId}</span>
+                    </div>
+                    <div className={styles.userInfo}>
+                        <span className={styles.userLabel}>Chatting with:</span>
+                        <span className={styles.userId}>{connectedToUser}</span>
+                        <span className={styles.connectionStatus}>
+                            {isConnected ? (isUserOnline ? '🟢 Online' : '🟡 Away') : '🔴 Disconnected'}
+                        </span>
+                    </div>
                 </div>
                 <button
                     onClick={handleDisconnect}
@@ -147,7 +164,7 @@ export const Chat = () => {
             </div>
 
             <div className={styles.messagesContainer}>
-                {messages.map((message) => (
+                {conversationMessages.map((message) => (
                     <div
                         key={`${message.id}-${message.fromId}-${message.timestamp}`}
                         className={`${styles.messageWrapper} ${
