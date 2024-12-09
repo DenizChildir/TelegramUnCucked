@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import {
     addMessage,
     setMessageDelivered,
+    setMessageRead,
     setUserOnlineStatus,
     clearChat,
     initializeMessages
@@ -32,24 +33,6 @@ export const Chat = () => {
         (msg.fromId === connectedToUser && msg.toId === currentUserId)
     );
 
-    // Scroll to bottom when new messages arrive
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [conversationMessages]);
-
-    // Load initial messages
-    useEffect(() => {
-        if (currentUserId && connectedToUser) {
-            const savedMessages = getMessages(currentUserId, connectedToUser);
-            dispatch(initializeMessages(savedMessages));
-            messageIdsRef.current = new Set(savedMessages.map(msg => msg.id));
-        }
-
-        return () => {
-            messageIdsRef.current.clear();
-        };
-    }, [currentUserId, connectedToUser, dispatch]);
-
     // WebSocket connection
     useEffect(() => {
         if (currentUserId) {
@@ -63,12 +46,41 @@ export const Chat = () => {
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+                console.log('Received WebSocket message:', data);
+
+                // Handle delivery confirmation
                 if (data.content === 'delivered') {
-                    dispatch(setMessageDelivered(data.messageId));
-                } else if (!messageIdsRef.current.has(data.id)) {
+                    // Get the original message ID by removing any 'delivery_' prefix
+                    const originalMessageId = (data.messageId || data.id).replace('delivery_', '');
+                    console.log('Processing delivery confirmation for message:', originalMessageId);
+                    dispatch(setMessageDelivered(originalMessageId));
+                    return;
+                }
+
+                // If it's a new message
+                if (!messageIdsRef.current.has(data.id)) {
+                    console.log('Received new message:', data);
                     messageIdsRef.current.add(data.id);
-                    saveMessage(data);
-                    dispatch(addMessage(data));
+
+                    // Only add to messages if it's not a delivery confirmation
+                    if (data.content !== 'delivered') {
+                        dispatch(addMessage({
+                            ...data,
+                            status: data.status || 'sent'
+                        }));
+
+                        // Send delivery receipt
+                        const deliveryReceipt = {
+                            id: `delivery_${data.id}`,
+                            fromId: currentUserId,
+                            toId: data.fromId,
+                            content: 'delivered',
+                            timestamp: new Date().toISOString(),
+                            status: 'delivered'
+                        };
+                        console.log('Sending delivery receipt:', deliveryReceipt);
+                        ws.send(JSON.stringify(deliveryReceipt));
+                    }
                 }
             };
 
@@ -77,58 +89,31 @@ export const Chat = () => {
                 console.log('WebSocket Disconnected');
             };
 
-            // Check online status periodically
-            const statusInterval = setInterval(async () => {
-                if (connectedToUser) {
-                    try {
-                        const response = await fetch(`http://localhost:3000/status/${connectedToUser}`);
-                        const data = await response.json();
-                        dispatch(setUserOnlineStatus({
-                            userId: connectedToUser,
-                            online: data.online
-                        }));
-                    } catch (error) {
-                        console.error('Error checking user status:', error);
-                    }
-                }
-            }, 5000);
-
             return () => {
-                clearInterval(statusInterval);
                 if (wsRef.current) {
                     wsRef.current.close();
                 }
             };
         }
-    }, [currentUserId, connectedToUser, dispatch]);
-
-    const handleDisconnect = () => {
-        if (wsRef.current) {
-            wsRef.current.close();
-        }
-        dispatch(clearChat());
-    };
+    }, [currentUserId, dispatch]);
 
     const sendMessage = (e: React.FormEvent) => {
         e.preventDefault();
         if (!messageText.trim() || !wsRef.current || !connectedToUser) return;
 
-        const message: Message = {
+        const message = {
             id: generateShortId(),
             fromId: currentUserId!,
             toId: connectedToUser,
             content: messageText.trim(),
             timestamp: new Date().toISOString(),
             delivered: false,
-            readStatus: false
+            status: 'sent'
         };
 
-        if (!messageIdsRef.current.has(message.id)) {
-            messageIdsRef.current.add(message.id);
-            saveMessage(message);
-            wsRef.current.send(JSON.stringify(message));
-            dispatch(addMessage(message));
-        }
+        console.log('Sending message:', message);
+        wsRef.current.send(JSON.stringify(message));
+        dispatch(addMessage(message));
         setMessageText('');
     };
 
@@ -155,12 +140,6 @@ export const Chat = () => {
                         </span>
                     </div>
                 </div>
-                <button
-                    onClick={handleDisconnect}
-                    className={styles.disconnectButton}
-                >
-                    Disconnect
-                </button>
             </div>
 
             <div className={styles.messagesContainer}>
@@ -180,9 +159,10 @@ export const Chat = () => {
                                     {formatTime(message.timestamp)}
                                 </span>
                                 {message.fromId === currentUserId && (
-                                    <span className={styles.messageStatus}>
-                                        {message.delivered ? '✓✓' : '✓'}
-                                    </span>
+                                    <span className={styles.messageStatus} title={message.status}>
+                                  {message.status === 'read' ? '✓✓✓' :
+                                  message.status === 'delivered' ? '✓✓' : '✓'}
+                                 </span>
                                 )}
                             </div>
                         </div>

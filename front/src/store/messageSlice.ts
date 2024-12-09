@@ -1,6 +1,22 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { Message } from '../types/types';
+
+interface MessageState {
+    messages: Message[];
+    currentUserId: string | null;
+    connectedToUser: string | null;
+    users: { [key: string]: User };
+}
+
+const initialState: MessageState = {
+    messages: [],
+    currentUserId: null,
+    connectedToUser: null,
+    users: {}
+};
 
 interface Message {
+    status: string;
     id: string;
     fromId: string;
     toId: string;
@@ -23,14 +39,6 @@ interface MessageState {
     websocket: WebSocket | null;
 }
 
-const initialState: MessageState = {
-    messages: [],
-    currentUserId: null,
-    connectedToUser: null,
-    users: {},
-    websocket: null
-};
-
 const messageSlice = createSlice({
     name: 'messages',
     initialState,
@@ -40,15 +48,6 @@ const messageSlice = createSlice({
         },
         setConnectedUser(state, action: PayloadAction<string>) {
             state.connectedToUser = action.payload;
-        },
-        addMessage(state, action: PayloadAction<Message>) {
-            state.messages.push(action.payload);
-        },
-        setMessageDelivered(state, action: PayloadAction<string>) {
-            const message = state.messages.find(m => m.id === action.payload);
-            if (message) {
-                message.delivered = true;
-            }
         },
         setUserOnlineStatus(state, action: PayloadAction<{ userId: string; online: boolean }>) {
             state.users[action.payload.userId] = {
@@ -65,6 +64,38 @@ const messageSlice = createSlice({
             state.connectedToUser = null;
             state.currentUserId = null;  // Also clear the current user
             state.users = {};  // Optionally clear users too
+        },
+        setMessageDelivered(state, action: PayloadAction<string>) {
+            // Remove 'delivery_' prefix if it exists
+            const originalMessageId = action.payload.replace('delivery_', '');
+            console.log('Setting message delivered for ID:', originalMessageId);
+
+            const message = state.messages.find(m => m.id === originalMessageId);
+            if (message) {
+                console.log('Found message to update:', message);
+                message.delivered = true;
+                message.status = 'delivered';
+            }
+        },
+
+        setMessageRead(state, action: PayloadAction<string>) {
+            const message = state.messages.find(m => m.id === action.payload);
+            if (message) {
+                message.readStatus = true;
+                message.status = 'read';
+            }
+        },
+        addMessage(state, action: PayloadAction<Message>) {
+            // Don't add delivery confirmation messages to the message list
+            if (action.payload.content === 'delivered') {
+                return;
+            }
+
+            const message = {
+                ...action.payload,
+                status: action.payload.status || 'sent'
+            };
+            state.messages.push(message);
         }
     }
 });
@@ -76,7 +107,8 @@ export const {
     setMessageDelivered,
     setUserOnlineStatus,
     clearChat,
-    initializeMessages
+    initializeMessages,
+    setMessageRead,
 } = messageSlice.actions;
 
 export default messageSlice.reducer;

@@ -22,6 +22,7 @@ type Message struct {
 	Timestamp  time.Time `json:"timestamp"`
 	Delivered  bool      `json:"delivered"`
 	ReadStatus bool      `json:"readStatus"`
+	Status     string    `json:"status"`
 }
 
 // Client represents a connected websocket client
@@ -144,13 +145,30 @@ func handleWebSocket(c *websocket.Conn) {
 		}
 
 		msg.Timestamp = time.Now()
-		msg.Delivered = false
 
-		// Try to deliver message
-		delivered := deliverMessage(msg)
-		if !delivered {
-			// Store message in database if recipient is offline
-			storeMessage(msg)
+		// Handle different message types
+		switch msg.Content {
+		case "delivered":
+			// Handle delivery confirmation
+			updateMessageStatus(msg.ToID, true, false)
+			delivered := deliverMessage(msg)
+			if !delivered {
+				storeMessage(msg)
+			}
+		case "read":
+			// Handle read receipt
+			updateMessageStatus(msg.ToID, true, true)
+			delivered := deliverMessage(msg)
+			if !delivered {
+				storeMessage(msg)
+			}
+		default:
+			// Regular message
+			msg.Status = "sent"
+			delivered := deliverMessage(msg)
+			if !delivered {
+				storeMessage(msg)
+			}
 		}
 	}
 
@@ -158,6 +176,18 @@ func handleWebSocket(c *websocket.Conn) {
 	clientsMux.Lock()
 	delete(clients, userID)
 	clientsMux.Unlock()
+}
+func updateMessageStatus(messageID string, delivered bool, read bool) {
+	query := `
+    UPDATE messages 
+    SET delivered = ?, read_status = ?
+    WHERE id = ?
+    `
+
+	_, err := db.Exec(query, delivered, read, messageID)
+	if err != nil {
+		log.Printf("Error updating message status: %v", err)
+	}
 }
 
 func deliverMessage(msg Message) bool {
