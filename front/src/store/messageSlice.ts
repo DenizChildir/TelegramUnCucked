@@ -50,10 +50,16 @@ const messageSlice = createSlice({
             state.connectedToUser = action.payload;
         },
         setUserOnlineStatus(state, action: PayloadAction<{ userId: string; online: boolean }>) {
-            state.users[action.payload.userId] = {
-                id: action.payload.userId,
-                online: action.payload.online
-            };
+            // Create the user entry if it doesn't exist
+            if (!state.users[action.payload.userId]) {
+                state.users[action.payload.userId] = {
+                    id: action.payload.userId,
+                    online: false
+                };
+            }
+
+            // Update the online status
+            state.users[action.payload.userId].online = action.payload.online;
         },
         initializeMessages(state, action: PayloadAction<Message[]>) {
             // Replace all messages with the initial set

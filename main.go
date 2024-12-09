@@ -132,8 +132,13 @@ func handleWebSocket(c *websocket.Conn) {
 	clients[userID] = client
 	clientsMux.Unlock()
 
+	// Broadcast that user is online
+	broadcastUserStatus(userID, true)
+
 	// Send offline messages when user connects
 	sendOfflineMessages(userID)
+	// Send current online users status to the newly connected client
+	sendCurrentOnlineUsers(client)
 
 	// WebSocket message handling loop
 	for {
@@ -146,7 +151,6 @@ func handleWebSocket(c *websocket.Conn) {
 
 		msg.Timestamp = time.Now()
 
-		// Handle different message types
 		switch msg.Content {
 		case "delivered":
 			// Handle delivery confirmation
@@ -163,7 +167,6 @@ func handleWebSocket(c *websocket.Conn) {
 				storeMessage(msg)
 			}
 		default:
-			// Regular message
 			msg.Status = "sent"
 			delivered := deliverMessage(msg)
 			if !delivered {
@@ -174,8 +177,50 @@ func handleWebSocket(c *websocket.Conn) {
 
 	// Cleanup when connection closes
 	clientsMux.Lock()
-	delete(clients, userID)
+	if client, exists := clients[userID]; exists {
+		client.IsOnline = false
+		delete(clients, userID)
+	}
 	clientsMux.Unlock()
+
+	// Broadcast that user is offline
+	broadcastUserStatus(userID, false)
+}
+
+func broadcastUserStatus(userID string, online bool) {
+	statusMsg := Message{
+		ID:      "status_" + userID,
+		Content: "status_update",
+		FromID:  userID,
+		Status:  map[bool]string{true: "online", false: "offline"}[online],
+	}
+
+	clientsMux.RLock()
+	defer clientsMux.RUnlock()
+
+	// Broadcast to all connected clients except the user themselves
+	for _, client := range clients {
+		if client.IsOnline && client.ID != userID {
+			client.Conn.WriteJSON(statusMsg)
+		}
+	}
+}
+func sendCurrentOnlineUsers(newClient *Client) {
+	clientsMux.RLock()
+	defer clientsMux.RUnlock()
+
+	// Send status of all online users to the new client
+	for clientID, client := range clients {
+		if client.IsOnline && clientID != newClient.ID {
+			statusMsg := Message{
+				ID:      "status_" + clientID,
+				Content: "status_update",
+				FromID:  clientID,
+				Status:  "online",
+			}
+			newClient.Conn.WriteJSON(statusMsg)
+		}
+	}
 }
 func updateMessageStatus(messageID string, delivered bool, read bool) {
 	query := `

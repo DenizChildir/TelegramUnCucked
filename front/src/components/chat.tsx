@@ -48,21 +48,26 @@ export const Chat = () => {
                 const data = JSON.parse(event.data);
                 console.log('Received WebSocket message:', data);
 
+                // Handle status updates
+                if (data.content === 'status_update') {
+                    dispatch(setUserOnlineStatus({
+                        userId: data.fromId,
+                        online: data.status === 'online'
+                    }));
+                    return;
+                }
+
                 // Handle delivery confirmation
                 if (data.content === 'delivered') {
-                    // Get the original message ID by removing any 'delivery_' prefix
                     const originalMessageId = (data.messageId || data.id).replace('delivery_', '');
-                    console.log('Processing delivery confirmation for message:', originalMessageId);
                     dispatch(setMessageDelivered(originalMessageId));
                     return;
                 }
 
-                // If it's a new message
+                // Handle new messages
                 if (!messageIdsRef.current.has(data.id)) {
-                    console.log('Received new message:', data);
                     messageIdsRef.current.add(data.id);
 
-                    // Only add to messages if it's not a delivery confirmation
                     if (data.content !== 'delivered') {
                         dispatch(addMessage({
                             ...data,
@@ -78,7 +83,6 @@ export const Chat = () => {
                             timestamp: new Date().toISOString(),
                             status: 'delivered'
                         };
-                        console.log('Sending delivery receipt:', deliveryReceipt);
                         ws.send(JSON.stringify(deliveryReceipt));
                     }
                 }
