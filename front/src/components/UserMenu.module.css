@@ -1,0 +1,83 @@
+/* UserMenu.module.css */
+.menuContainer {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.currentStatus {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.buttonGroup {
+    display: flex;
+    gap: 8px;
+}
+
+.userList {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.userButton {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.userButton:hover {
+    background-color: #e9ecef;
+}
+
+.activeUser {
+    background-color: #007bff;
+    color: white;
+    border-color: #0056b3;
+}
+
+.activeUser:hover {
+    background-color: #0056b3;
+}
+
+.logoutButton {
+    padding: 6px 12px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.logoutButton:hover {
+    background-color: #c82333;
+}
+
+.disconnectButton {
+    padding: 6px 12px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.disconnectButton:hover {
+    background-color: #5a6268;
+}
+
+h4 {
+    margin: 8px 0;
+    color: #495057;
+}
