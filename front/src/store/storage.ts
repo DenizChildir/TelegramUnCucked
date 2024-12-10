@@ -4,49 +4,78 @@ import { Message } from "../types/types";
 export const saveMessage = (message: Message) => {
     const storage = getStorageManager();
     const key = `${message.fromId}:${message.toId}`;
-    const reverseKey = `${message.toId}:${message.fromId}`;
 
-    // Ensure message arrays exist
+    // Initialize arrays if they don't exist
     if (!storage.messages[key]) {
         storage.messages[key] = [];
     }
-    if (!storage.messages[reverseKey]) {
-        storage.messages[reverseKey] = [];
+
+    // Don't save delivery confirmation messages
+    if (message.content === 'delivered') {
+        return;
     }
 
-    // Check if message already exists in either array
-    const messageExists = storage.messages[key].some(msg => msg.id === message.id) ||
-        storage.messages[reverseKey].some(msg => msg.id === message.id);
+    // Check if message already exists
+    const messageExists = storage.messages[key].some(msg => msg.id === message.id);
 
     if (!messageExists) {
-        storage.messages[key].push(message);
-        // Only store in reverse key if it's a different conversation
-        if (key !== reverseKey) {
-            storage.messages[reverseKey].push(message);
-        }
+        // Add debugging timestamps
+        const messageWithTimestamp = {
+            ...message,
+            savedAt: new Date().toISOString()
+        };
+
+        storage.messages[key].push(messageWithTimestamp);
         saveToStorage(storage);
+
+        console.log('Saved message in storage:', {
+            key,
+            message: messageWithTimestamp,
+            allStoredMessages: storage.messages
+        });
     }
 };
-
 export const getMessages = (userId1: string, userId2: string): Message[] => {
     const storage = getStorageManager();
-    const key = `${userId1}:${userId2}`;
+    const forwardKey = `${userId1}:${userId2}`;
+    const reverseKey = `${userId2}:${userId1}`;
 
-    // Get messages and ensure uniqueness by ID
-    const messages = storage.messages[key] || [];
+    console.log('Getting messages with keys:', { forwardKey, reverseKey });
+    console.log('Current storage state:', storage.messages);
+
+    // Get messages from both directions
+    const forwardMessages = storage.messages[forwardKey] || [];
+    const reverseMessages = storage.messages[reverseKey] || [];
+
+    console.log('Found messages:', {
+        forward: forwardMessages,
+        reverse: reverseMessages
+    });
+
+    // Combine all messages
+    const allMessages = [...forwardMessages, ...reverseMessages];
+
+    // Remove duplicate messages based on ID
     const uniqueMessages = Array.from(
-        messages.reduce((map, message) => {
-            if (!map.has(message.id)) {
+        allMessages.reduce((map, message) => {
+            // Skip 'delivered' messages
+            if (message.content !== 'delivered') {
                 map.set(message.id, message);
             }
             return map;
         }, new Map<string, Message>()).values()
     );
 
-    return uniqueMessages.sort((a, b) =>
+    // Sort by timestamp
+    const sortedMessages = uniqueMessages.sort((a, b) =>
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
+
+    console.log('Returning sorted messages:', sortedMessages);
+    return sortedMessages;
 };
+
+
 
 export const generateShortId = (): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -147,4 +176,18 @@ export const deleteContactHistory = (userId: string, contactId: string) => {
 
 export const deleteAllUserData = () => {
     localStorage.removeItem(STORAGE_KEY);
+};
+
+export const debugStorage = () => {
+    const storage = getStorageManager();
+    console.log('Current storage state:', storage);
+};
+
+export const inspectStorage = () => {
+    const storage = getStorageManager();
+    console.log('Current Storage State:', {
+        messages: storage.messages,
+        messageKeys: Object.keys(storage.messages),
+        users: storage.users
+    });
 };

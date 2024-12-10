@@ -46,8 +46,10 @@ const messageSlice = createSlice({
         setCurrentUser(state, action: PayloadAction<string>) {
             state.currentUserId = action.payload;
         },
-        setConnectedUser(state, action: PayloadAction<string>) {
+        setConnectedUser(state, action: PayloadAction<string | null>) {
             state.connectedToUser = action.payload;
+            // Clear messages when changing users
+            state.messages = [];
         },
         setUserOnlineStatus(state, action: PayloadAction<{ userId: string; online: boolean }>) {
             // Create the user entry if it doesn't exist

@@ -9,7 +9,7 @@ import {
     initializeMessages
 } from '../store/messageSlice';
 import { Message } from '../types/types';
-import { saveMessage, getMessages, generateShortId } from '../store/storage';
+import {saveMessage, getMessages, generateShortId, debugStorage, inspectStorage} from '../store/storage';
 import styles from './Chat.module.css';
 
 export const Chat = () => {
@@ -46,46 +46,7 @@ export const Chat = () => {
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                console.log('Received WebSocket message:', data);
-
-                // Handle status updates
-                if (data.content === 'status_update') {
-                    dispatch(setUserOnlineStatus({
-                        userId: data.fromId,
-                        online: data.status === 'online'
-                    }));
-                    return;
-                }
-
-                // Handle delivery confirmation
-                if (data.content === 'delivered') {
-                    const originalMessageId = (data.messageId || data.id).replace('delivery_', '');
-                    dispatch(setMessageDelivered(originalMessageId));
-                    return;
-                }
-
-                // Handle new messages
-                if (!messageIdsRef.current.has(data.id)) {
-                    messageIdsRef.current.add(data.id);
-
-                    if (data.content !== 'delivered') {
-                        dispatch(addMessage({
-                            ...data,
-                            status: data.status || 'sent'
-                        }));
-
-                        // Send delivery receipt
-                        const deliveryReceipt = {
-                            id: `delivery_${data.id}`,
-                            fromId: currentUserId,
-                            toId: data.fromId,
-                            content: 'delivered',
-                            timestamp: new Date().toISOString(),
-                            status: 'delivered'
-                        };
-                        ws.send(JSON.stringify(deliveryReceipt));
-                    }
-                }
+                handleWebSocketMessage(data);
             };
 
             ws.onclose = () => {
@@ -117,8 +78,14 @@ export const Chat = () => {
 
         console.log('Sending message:', message);
         wsRef.current.send(JSON.stringify(message));
+
+        // Save message immediately
+        saveMessage(message);
         dispatch(addMessage(message));
         setMessageText('');
+
+        // Debug storage after saving
+        debugStorage();
     };
 
     const formatTime = (timestamp: string) => {
@@ -127,6 +94,64 @@ export const Chat = () => {
             minute: '2-digit'
         });
     };
+
+    useEffect(() => {
+        if (currentUserId && connectedToUser) {
+            console.log('Loading messages for conversation:', {
+                currentUserId,
+                connectedToUser
+            });
+
+            inspectStorage();  // Log current storage state
+            const storedMessages = getMessages(currentUserId, connectedToUser);
+            dispatch(initializeMessages(storedMessages));
+        }
+    }, [currentUserId, connectedToUser, dispatch]);
+
+    const handleWebSocketMessage = (data: any) => {
+        console.log('Received WebSocket message:', data);
+
+        // Handle status updates
+        if (data.content === 'status_update') {
+            dispatch(setUserOnlineStatus({
+                userId: data.fromId,
+                online: data.status === 'online'
+            }));
+            return;
+        }
+
+        // Handle delivery confirmation
+        if (data.content === 'delivered') {
+            if (data.id) {
+                const originalMessageId = data.id.replace('delivery_', '');
+                dispatch(setMessageDelivered(originalMessageId));
+            }
+            return;
+        }
+
+        // Handle new messages
+        if (!messageIdsRef.current.has(data.id)) {
+            messageIdsRef.current.add(data.id);
+            if (data.content !== 'delivered') {
+                saveMessage(data);  // Save the message to storage
+                dispatch(addMessage(data));
+
+                // Send delivery receipt
+                if (wsRef.current) {
+                    const deliveryReceipt = {
+                        id: `delivery_${data.id}`,
+                        fromId: currentUserId,
+                        toId: data.fromId,
+                        content: 'delivered',
+                        timestamp: new Date().toISOString(),
+                        status: 'delivered'
+                    };
+                    wsRef.current.send(JSON.stringify(deliveryReceipt));
+                }
+            }
+        }
+    };
+
 
     return (
         <div className={styles.chatContainer}>
