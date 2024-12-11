@@ -1,19 +1,43 @@
 /* UserMenu.module.css */
 .menuContainer {
-    background-color: #f8f9fa;
+    background-color: #f5f5f5;
     border-radius: 8px;
     padding: 16px;
     margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .currentStatus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     padding-bottom: 12px;
     border-bottom: 1px solid #e0e0e0;
+}
+
+.menuSections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.section {
+    background-color: white;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.sectionTitle {
+    margin: 0 0 12px 0;
+    color: #333;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.contactsList, .userList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .buttonGroup {
@@ -21,63 +45,60 @@
     gap: 8px;
 }
 
-.userList {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 8px;
-}
-
-.userButton {
-    padding: 6px 12px;
-    border: 1px solid #ddd;
+.contactButton, .userButton {
+    padding: 8px 12px;
+    border: 1px solid #e0e0e0;
     border-radius: 4px;
     background-color: white;
+    text-align: left;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
-.userButton:hover {
-    background-color: #e9ecef;
+.contactButton:hover, .userButton:hover {
+    background-color: #f0f0f0;
 }
 
-.activeUser {
-    background-color: #007bff;
-    color: white;
-    border-color: #0056b3;
+.activeContact, .activeUser {
+    background-color: #e3f2fd;
+    border-color: #90caf9;
 }
 
-.activeUser:hover {
-    background-color: #0056b3;
+.currentIndicator {
+    font-size: 0.8rem;
+    color: #666;
+    font-style: italic;
 }
 
-.logoutButton {
+.disconnectButton, .logoutButton {
     padding: 6px 12px;
-    background-color: #dc3545;
-    color: white;
-    border: none;
     border-radius: 4px;
+    border: none;
     cursor: pointer;
-}
-
-.logoutButton:hover {
-    background-color: #c82333;
+    font-size: 0.9rem;
 }
 
 .disconnectButton {
-    padding: 6px 12px;
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.logoutButton {
+    background-color: #fafafa;
+    color: #333;
 }
 
 .disconnectButton:hover {
-    background-color: #5a6268;
+    background-color: #ffcdd2;
 }
 
-h4 {
-    margin: 8px 0;
-    color: #495057;
+.logoutButton:hover {
+    background-color: #f5f5f5;
+}
+
+.noContacts {
+    color: #666;
+    font-style: italic;
+    font-size: 0.9rem;
+    padding: 8px;
 }
