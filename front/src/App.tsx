@@ -3,7 +3,7 @@ import React from 'react';
 import { Provider } from 'react-redux';
 import { store } from './store/store';
 import { UserSetup } from './components/UserSetup';
-import { Chat } from './components/Chat';
+import { Chat } from './components/chat';
 import { useAppSelector } from './hooks/redux';
 import { UserMenu } from './components/UserMenu';
 import { ConnectUser } from './components/ConnectUser';

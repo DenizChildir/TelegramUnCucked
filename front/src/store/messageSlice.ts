@@ -15,17 +15,6 @@ const initialState: MessageState = {
     users: {}
 };
 
-interface Message {
-    status: string;
-    id: string;
-    fromId: string;
-    toId: string;
-    content: string;
-    timestamp: string;
-    delivered: boolean;
-    readStatus: boolean;
-}
-
 interface User {
     id: string;
     online: boolean;
@@ -36,7 +25,6 @@ interface MessageState {
     currentUserId: string | null;
     connectedToUser: string | null;
     users: { [key: string]: User };
-    websocket: WebSocket | null;
 }
 
 const messageSlice = createSlice({

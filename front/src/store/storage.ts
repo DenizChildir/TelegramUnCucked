@@ -103,15 +103,6 @@ export interface StorageManager {
 
 const STORAGE_KEY = 'chat_storage';
 
-
-export const getStorageManager = (): StorageManager => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-        return JSON.parse(stored);
-    }
-    return { messages: {}, users: [] };
-};
-
 export const saveToStorage = (manager: StorageManager) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(manager));
 };
@@ -190,4 +181,66 @@ export const inspectStorage = () => {
         messageKeys: Object.keys(storage.messages),
         users: storage.users
     });
+};
+
+// storage.ts - Add these new functions
+export interface RecentContact {
+    userId: string;
+    lastInteraction: string;
+}
+
+export interface StorageManager {
+    messages: {[key: string]: Message[]};
+    users: StoredUser[];
+    recentContacts: {[userId: string]: RecentContact[]};
+}
+
+// Add this to your existing getStorageManager function
+export const getStorageManager = (): StorageManager => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+        try {
+            const parsed = JSON.parse(stored);
+            // Ensure recentContacts exists
+            return {
+                ...parsed,
+                recentContacts: parsed.recentContacts || {}
+            };
+        } catch (e) {
+            console.error('Error parsing storage:', e);
+            return { messages: {}, users: [], recentContacts: {} };
+        }
+    }
+    return { messages: {}, users: [], recentContacts: {} };
+};
+// New function to save recent contact
+export const saveRecentContact = (currentUserId: string, contactId: string) => {
+    const storage = getStorageManager();
+
+    // Initialize recentContacts for current user if doesn't exist
+    if (!storage.recentContacts[currentUserId]) {
+        storage.recentContacts[currentUserId] = [];
+    }
+
+    // Remove existing entry if present
+    storage.recentContacts[currentUserId] = storage.recentContacts[currentUserId]
+        .filter(contact => contact.userId !== contactId);
+
+    // Add new entry at the beginning
+    storage.recentContacts[currentUserId].unshift({
+        userId: contactId,
+        lastInteraction: new Date().toISOString()
+    });
+
+    // Keep only last 5 contacts
+    storage.recentContacts[currentUserId] =
+        storage.recentContacts[currentUserId].slice(0, 5);
+
+    saveToStorage(storage);
+};
+
+// New function to get recent contacts
+export const getRecentContacts = (userId: string): RecentContact[] => {
+    const storage = getStorageManager();
+    return storage.recentContacts[userId] || [];
 };

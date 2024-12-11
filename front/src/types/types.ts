@@ -6,7 +6,7 @@ export interface Message {
     timestamp: string;
     delivered: boolean;
     readStatus: boolean;
-    status: 'sent' | 'delivered' | 'read';  // New field
+    status: 'sent' | 'delivered' | 'read';
 }
 
 export interface User {

@@ -66,26 +66,23 @@ export const Chat = () => {
         e.preventDefault();
         if (!messageText.trim() || !wsRef.current || !connectedToUser) return;
 
-        const message = {
+        const message: Message = {
             id: generateShortId(),
             fromId: currentUserId!,
             toId: connectedToUser,
             content: messageText.trim(),
             timestamp: new Date().toISOString(),
             delivered: false,
+            readStatus: false,
             status: 'sent'
         };
 
         console.log('Sending message:', message);
         wsRef.current.send(JSON.stringify(message));
 
-        // Save message immediately
         saveMessage(message);
         dispatch(addMessage(message));
         setMessageText('');
-
-        // Debug storage after saving
-        debugStorage();
     };
 
     const formatTime = (timestamp: string) => {
