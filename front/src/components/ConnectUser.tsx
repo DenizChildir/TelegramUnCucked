@@ -40,22 +40,7 @@ export const ConnectUser = () => {
                 Your ID: <span className={styles.userId}>{currentUserId}</span>
             </div>
 
-            {recentContacts.length > 0 && (
-                <div className={styles.recentContacts}>
-                    <h3>Recent Contacts</h3>
-                    <div className={styles.contactsList}>
-                        {recentContacts.map(contact => (
-                            <button
-                                key={contact.userId}
-                                onClick={() => handleConnect(contact.userId)}
-                                className={styles.contactButton}
-                            >
-                                {contact.userId}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
+            
 
             <form onSubmit={handleSubmit} className={styles.form}>
                 <div className={styles.inputGroup}>
