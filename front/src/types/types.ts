@@ -1,3 +1,4 @@
+// types.ts - Add these to your existing types
 export interface Message {
     id: string;
     fromId: string;
@@ -9,7 +10,17 @@ export interface Message {
     status: 'sent' | 'delivered' | 'read';
 }
 
-export interface User {
-    id: string;
-    online: boolean;
+export interface RecentContact {
+    userId: string;
+    lastInteraction: string;
+}
+
+// Add FileSystem API types
+declare global {
+    interface Window {
+        showDirectoryPicker(options?: {
+            mode?: 'read' | 'readwrite';
+            startIn?: 'desktop' | 'documents' | 'downloads' | 'music' | 'pictures' | 'videos';
+        }): Promise<FileSystemDirectoryHandle>;
+    }
 }

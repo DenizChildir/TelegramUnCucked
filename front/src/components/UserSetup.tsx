@@ -1,15 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppDispatch } from '../hooks/redux';
-import { setCurrentUser } from '../store/messageSlice';
-import { generateShortId, saveUser, getRecentUsers, StoredUser } from '../store/storage.ts';
+import { setCurrentUserAsync } from '../store/messageSlice';
+import { generateShortId, getRecentUsers, StoredUser } from '../store/fileStorage';
 import styles from './UserSetup.module.css';
 
 export const UserSetup = () => {
     const [userId, setUserId] = useState('');
     const [selectedId, setSelectedId] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [recentUsers, setRecentUsers] = useState<StoredUser[]>([]);
+    const [error, setError] = useState<string | null>(null);
     const dispatch = useAppDispatch();
-    const recentUsers = getRecentUsers();
+
+    // Load recent users on component mount
+    useEffect(() => {
+        const loadRecentUsers = async () => {
+            try {
+                const users = await getRecentUsers();
+                setRecentUsers(users);
+            } catch (error) {
+                setError('Failed to load recent users');
+                console.error('Error loading recent users:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadRecentUsers();
+    }, []);
 
     const generateNewId = () => {
         const newId = generateShortId();
@@ -17,11 +35,20 @@ export const UserSetup = () => {
         setSelectedId(newId);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (userId.trim()) {
-            saveUser(userId);
-            dispatch(setCurrentUser(userId));
+        if (!userId.trim()) return;
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            await dispatch(setCurrentUserAsync(userId)).unwrap();
+        } catch (error) {
+            setError('Failed to set user ID. Please try again.');
+            console.error('Error setting user:', error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -30,9 +57,23 @@ export const UserSetup = () => {
         setSelectedId(user.id);
     };
 
+    if (isLoading && !userId) {
+        return (
+            <div className={styles.container}>
+                <div className={styles.loadingIndicator}>Loading...</div>
+            </div>
+        );
+    }
+
     return (
         <div className={styles.container}>
             <h2 className={styles.title}>Setup User ID</h2>
+
+            {error && (
+                <div className={styles.errorMessage}>
+                    {error}
+                </div>
+            )}
 
             {selectedId && (
                 <div className={styles.selectedIdContainer}>
@@ -52,6 +93,7 @@ export const UserSetup = () => {
                                 className={`${styles.userButton} ${
                                     user.id === selectedId ? styles.userButtonSelected : styles.userButtonUnselected
                                 }`}
+                                disabled={isLoading}
                             >
                                 {user.id}
                             </button>
@@ -70,6 +112,7 @@ export const UserSetup = () => {
                     }}
                     placeholder="Enter user ID"
                     className={styles.input}
+                    disabled={isLoading}
                 />
                 <div className={styles.buttonGroup}>
                     <button
@@ -82,10 +125,10 @@ export const UserSetup = () => {
                     </button>
                     <button
                         type="submit"
-                        disabled={!userId.trim()}
-                        className={styles.submitButton}
+                        disabled={isLoading || !userId.trim()}
+                        className={`${styles.submitButton} ${isLoading ? styles.loading : ''}`}
                     >
-                        Connect
+                        {isLoading ? 'Connecting...' : 'Connect'}
                     </button>
                 </div>
             </form>
