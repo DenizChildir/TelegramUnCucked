@@ -70,36 +70,58 @@ export const Chat = () => {
     useEffect(() => {
         if (!currentUserId) return;
 
-        const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
-        wsRef.current = ws;
+        let reconnectTimeout: NodeJS.Timeout;
+        const MAX_RETRIES = 3;
+        let retryCount = 0;
 
-        ws.onopen = () => {
-            setIsConnected(true);
-            setError(null);
-        };
+        const connectWebSocket = () => {
+            if (retryCount >= MAX_RETRIES) {
+                setError('Failed to connect after multiple attempts');
+                return;
+            }
 
-        ws.onmessage = async (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.content === 'status_update') {  // Changed from data.type === 'status'
-                    dispatch(setUserOnlineStatus({
-                        userId: data.fromId,  // Changed from data.userId
-                        online: data.status === 'online'
-                    }));
+            const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
+            wsRef.current = ws;
+
+            ws.onopen = () => {
+                setIsConnected(true);
+                setError(null);
+                retryCount = 0; // Reset retry count on successful connection
+                console.log('WebSocket connected');
+            };
+
+            ws.onclose = (event) => {
+                setIsConnected(false);
+                console.log('WebSocket disconnected with code:', event.code);
+
+                // Don't retry if the close was clean
+                if (event.wasClean) {
+                    console.log('Clean websocket close');
                     return;
                 }
-            } catch (error) {
-                console.error('Error processing message:', error);
-                setError('Error processing incoming message');
-            }
+
+                // Attempt reconnection with exponential backoff
+                const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+                reconnectTimeout = setTimeout(() => {
+                    retryCount++;
+                    console.log(`Attempting reconnection ${retryCount}/${MAX_RETRIES}`);
+                    connectWebSocket();
+                }, delay);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                // Don't set error state here as it will be handled by onclose
+            };
         };
 
-        ws.onclose = () => setIsConnected(false);
-        ws.onerror = () => setError('Connection error. Please try again.');
+        connectWebSocket();
 
+        // Cleanup function
         return () => {
+            clearTimeout(reconnectTimeout);
             if (wsRef.current) {
-                wsRef.current.close();
+                wsRef.current.close(1000, 'Component unmounting'); // Clean close
             }
         };
     }, [currentUserId, dispatch]);

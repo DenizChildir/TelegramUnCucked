@@ -246,24 +246,43 @@ class FileSystemStorage {
         this.cachedData.users = this.cachedData.users.filter(user => user.id !== userId);
         await this.writeFile('users/users.json', JSON.stringify(this.cachedData.users));
 
-        // Remove user's messages
-        const messagesToDelete: string[] = [];
-        for (const key in this.cachedData.messages) {
-            const [fromId, toId] = key.split(':');
-            if (fromId === userId || toId === userId) {
-                messagesToDelete.push(key);
-                delete this.cachedData.messages[key];
-            }
-        }
+        // Get all message files for this user
+        const messagesDir = await this.getOrCreateDirectory('messages');
 
-        // Delete message files
-        for (const key of messagesToDelete) {
-            const messagesDir = await this.getOrCreateDirectory('messages');
-            try {
-                await messagesDir.removeEntry(`${key}.json`);
-            } catch (error) {
-                console.error(`Error deleting message file ${key}:`, error);
+        try {
+            // List all files in messages directory
+            for await (const entry of messagesDir.values()) {
+                if (entry.kind === 'file' && entry.name.endsWith('.json')) {
+                    // Check if file name contains the userId
+                    if (entry.name.includes(`msg_${userId}_to_`) ||
+                        entry.name.includes(`_to_${userId}.json`)) {
+                        try {
+                            await messagesDir.removeEntry(entry.name);
+                            console.log(`Successfully deleted file: ${entry.name}`);
+                        } catch (error) {
+                            console.error(`Error deleting file ${entry.name}:`, error);
+                        }
+                    }
+                }
             }
+
+            // Clear from cache
+            for (const key in this.cachedData.messages) {
+                if (key.includes(userId)) {
+                    delete this.cachedData.messages[key];
+                }
+            }
+
+            // Clear from recent contacts
+            delete this.cachedData.recentContacts[userId];
+            await this.writeFile(
+                'contacts/contacts.json',
+                JSON.stringify(this.cachedData.recentContacts)
+            );
+
+        } catch (error) {
+            console.error('Error deleting user data:', error);
+            throw new Error('Failed to delete user data');
         }
     }
 
