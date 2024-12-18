@@ -1,0 +1,94 @@
+/* UserSetup.module.css */
+.container {
+    composes: card from '../layout.css';
+    max-width: 400px;
+    margin: 0 auto var(--spacing-lg) auto;
+}
+
+.title {
+    color: var(--color-gray-800);
+    font-size: var(--font-size-lg);
+    margin: 0 0 var(--spacing-lg) 0;
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--color-gray-200);
+    text-align: center;
+}
+
+.selectedIdContainer {
+    composes: card from '../layout.css';
+    background-color: var(--color-gray-100);
+    text-align: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.selectedIdLabel {
+    color: var(--color-gray-600);
+}
+
+.selectedId {
+    color: var(--color-primary);
+    font-weight: 600;
+    margin-left: var(--spacing-sm);
+    font-family: monospace;
+}
+
+.recentUsersSection {
+    margin-bottom: var(--spacing-lg);
+}
+
+.recentUsersTitle {
+    color: var(--color-gray-700);
+    font-size: var(--font-size-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.recentUsersList {
+    composes: flex gap-sm from '../utils.css';
+    flex-wrap: wrap;
+}
+
+.userButton {
+    composes: button button-secondary from '../components.css';
+}
+
+.userButtonSelected {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.form {
+    composes: flex flex-col gap-md from '../utils.css';
+}
+
+.input {
+    composes: input from '../components.css';
+}
+
+.buttonGroup {
+    composes: flex gap-sm from '../utils.css';
+}
+
+.generateButton {
+    composes: button button-secondary from '../components.css';
+    flex: 1;
+}
+
+.submitButton {
+    composes: button button-primary from '../components.css';
+    flex: 1;
+}
+
+.errorMessage {
+    background-color: var(--color-danger);
+    color: white;
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-sm);
+    margin-bottom: var(--spacing-md);
+    composes: fade-in from '../animations.css';
+}
+
+.loadingIndicator {
+    color: var(--color-gray-600);
+    text-align: center;
+    padding: var(--spacing-md);
+}

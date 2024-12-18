@@ -8,10 +8,15 @@ import {
     initializeMessagesAsync
 } from '../store/messageSlice';
 import { Message } from '../types/types';
-import { generateShortId } from '../store/fileStorage';
-import styles from './Chat.module.css';
+import styles from '../styles/modules/Chat.module.css';
 
 export const Chat = () => {
+    const dispatch = useAppDispatch();
+    const currentUserId = useAppSelector(state => state.messages.currentUserId);
+    const connectedToUser = useAppSelector(state => state.messages.connectedToUser);
+    const messages = useAppSelector(state => state.messages.messages);
+    const users = useAppSelector(state => state.messages.users);
+
     const [messageText, setMessageText] = useState('');
     const [isConnected, setIsConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -20,12 +25,6 @@ export const Chat = () => {
     const wsRef = useRef<WebSocket | null>(null);
     const messageIdsRef = useRef(new Set<string>());
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const dispatch = useAppDispatch();
-
-    const currentUserId = useAppSelector(state => state.messages.currentUserId);
-    const connectedToUser = useAppSelector(state => state.messages.connectedToUser);
-    const messages = useAppSelector(state => state.messages.messages);
-    const users = useAppSelector(state => state.messages.users);
 
     const isUserOnline = connectedToUser ? users[connectedToUser]?.online : false;
 
@@ -34,120 +33,19 @@ export const Chat = () => {
         (msg.fromId === connectedToUser && msg.toId === currentUserId)
     );
 
-    // Load messages when conversation changes
-    useEffect(() => {
-        const loadMessages = async () => {
-            if (!currentUserId || !connectedToUser) return;
-
-            setIsLoading(true);
-            setError(null);
-
-            try {
-                await dispatch(initializeMessagesAsync({
-                    userId1: currentUserId,
-                    userId2: connectedToUser
-                })).unwrap();
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                setError('Failed to load messages. Please try refreshing.');
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        loadMessages();
-    }, [currentUserId, connectedToUser, dispatch]);
-
-    // WebSocket connection
-    useEffect(() => {
-        if (!currentUserId) return;
-
-        const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-            setIsConnected(true);
-            setError(null);
-            console.log('WebSocket Connected');
-        };
-
-        ws.onmessage = async (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                await handleWebSocketMessage(data);
-            } catch (error) {
-                console.error('Error handling WebSocket message:', error);
-                setError('Error processing message');
-            }
-        };
-
-        ws.onclose = () => {
-            setIsConnected(false);
-            console.log('WebSocket Disconnected');
-        };
-
-        ws.onerror = () => {
-            setError('Connection error. Please check your internet connection.');
-        };
-
-        return () => {
-            if (wsRef.current) {
-                wsRef.current.close();
-            }
-        };
-    }, [currentUserId]);
-
-    const handleWebSocketMessage = async (data: any) => {
-        console.log('Received WebSocket message:', data);
-
-        if (data.content === 'status_update') {
-            dispatch(setUserOnlineStatus({
-                userId: data.fromId,
-                online: data.status === 'online'
-            }));
-            return;
-        }
-
-        if (data.content === 'delivered') {
-            if (data.id) {
-                const originalMessageId = data.id.replace('delivery_', '');
-                dispatch(setMessageDelivered(originalMessageId));
-            }
-            return;
-        }
-
-        if (!messageIdsRef.current.has(data.id)) {
-            messageIdsRef.current.add(data.id);
-            if (data.content !== 'delivered') {
-                try {
-                    await dispatch(addMessageAsync(data)).unwrap();
-
-                    // Send delivery receipt
-                    if (wsRef.current) {
-                        const deliveryReceipt = {
-                            id: `delivery_${data.id}`,
-                            fromId: currentUserId,
-                            toId: data.fromId,
-                            content: 'delivered',
-                            timestamp: new Date().toISOString(),
-                            status: 'delivered'
-                        };
-                        wsRef.current.send(JSON.stringify(deliveryReceipt));
-                    }
-                } catch (error) {
-                    console.error('Error saving message:', error);
-                    setError('Failed to save message');
-                }
-            }
-        }
+    const formatTime = (timestamp: string) => {
+        return new Date(timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     };
 
-    const sendMessage = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!messageText.trim() || !wsRef.current || !connectedToUser || !isConnected) return;
 
         const message: Message = {
-            id: generateShortId(),
+            id: crypto.randomUUID(),
             fromId: currentUserId!,
             toId: connectedToUser,
             content: messageText.trim(),
@@ -168,12 +66,65 @@ export const Chat = () => {
         }
     };
 
-    const formatTime = (timestamp: string) => {
-        return new Date(timestamp).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
+    // WebSocket connection effect
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+            setIsConnected(true);
+            setError(null);
+        };
+
+        ws.onmessage = async (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.content === 'status_update') {  // Changed from data.type === 'status'
+                    dispatch(setUserOnlineStatus({
+                        userId: data.fromId,  // Changed from data.userId
+                        online: data.status === 'online'
+                    }));
+                    return;
+                }
+            } catch (error) {
+                console.error('Error processing message:', error);
+                setError('Error processing incoming message');
+            }
+        };
+
+        ws.onclose = () => setIsConnected(false);
+        ws.onerror = () => setError('Connection error. Please try again.');
+
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+        };
+    }, [currentUserId, dispatch]);
+
+    // Load initial messages
+    useEffect(() => {
+        const loadMessages = async () => {
+            if (!currentUserId || !connectedToUser) return;
+
+            setIsLoading(true);
+            try {
+                await dispatch(initializeMessagesAsync({
+                    userId1: currentUserId,
+                    userId2: connectedToUser
+                })).unwrap();
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                setError('Failed to load messages');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadMessages();
+    }, [currentUserId, connectedToUser, dispatch]);
 
     return (
         <div className={styles.chatContainer}>
@@ -182,59 +133,47 @@ export const Chat = () => {
                     <div className={styles.userInfo}>
                         <span className={styles.userLabel}>Your ID:</span>
                         <span className={styles.userId}>{currentUserId}</span>
-                    </div>
-                    <div className={styles.userInfo}>
-                        <span className={styles.userLabel}>Chatting with:</span>
-                        <span className={styles.userId}>{connectedToUser}</span>
                         <span className={styles.connectionStatus}>
-                            {isConnected ? (isUserOnline ? '🟢 Online' : '🟡 Away') : '🔴 Disconnected'}
+                            {isConnected ? (isUserOnline ? '🟢 Online' : '🟡 Away') : '🔴 Offline'}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {error && (
-                <div className={styles.errorMessage}>
-                    {error}
-                </div>
-            )}
-
             <div className={styles.messagesContainer}>
                 {isLoading ? (
                     <div className={styles.loadingIndicator}>Loading messages...</div>
                 ) : (
-                    <>
-                        {conversationMessages.map((message) => (
-                            <div
-                                key={`${message.id}-${message.fromId}-${message.timestamp}`}
-                                className={`${styles.messageWrapper} ${
-                                    message.fromId === currentUserId ? styles.messageOutgoing : styles.messageIncoming
-                                }`}
-                            >
-                                <div className={`${styles.messageBubble} ${
-                                    message.fromId === currentUserId ? styles.messageBubbleOutgoing : styles.messageBubbleIncoming
-                                }`}>
-                                    <div className={styles.messageContent}>{message.content}</div>
-                                    <div className={styles.messageFooter}>
-                                        <span className={styles.messageTime}>
-                                            {formatTime(message.timestamp)}
+                    conversationMessages.map((message: Message) => (
+                        <div
+                            key={message.id}
+                            className={`${styles.messageWrapper} ${
+                                message.fromId === currentUserId ? styles.messageOutgoing : styles.messageIncoming
+                            }`}
+                        >
+                            <div className={`${styles.messageBubble} ${
+                                message.fromId === currentUserId ?
+                                    styles.messageBubbleOutgoing :
+                                    styles.messageBubbleIncoming
+                            }`}>
+                                {message.content}
+                                <div className={styles.messageTime}>
+                                    {formatTime(message.timestamp)}
+                                    {message.fromId === currentUserId && (
+                                        <span className={styles.messageStatus}>
+                                            {message.status === 'read' ? '✓✓✓' :
+                                                message.status === 'delivered' ? '✓✓' : '✓'}
                                         </span>
-                                        {message.fromId === currentUserId && (
-                                            <span className={styles.messageStatus} title={message.status}>
-                                                {message.status === 'read' ? '✓✓✓' :
-                                                    message.status === 'delivered' ? '✓✓' : '✓'}
-                                            </span>
-                                        )}
-                                    </div>
+                                    )}
                                 </div>
                             </div>
-                        ))}
-                    </>
+                        </div>
+                    ))
                 )}
                 <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={sendMessage} className={styles.inputForm}>
+            <form onSubmit={handleSubmit} className={styles.inputForm}>
                 <input
                     type="text"
                     value={messageText}
@@ -246,7 +185,7 @@ export const Chat = () => {
                 <button
                     type="submit"
                     disabled={!isConnected || !messageText.trim()}
-                    className={`${styles.sendButton} ${!isConnected ? styles.disabled : ''}`}
+                    className={styles.sendButton}
                 >
                     Send
                 </button>

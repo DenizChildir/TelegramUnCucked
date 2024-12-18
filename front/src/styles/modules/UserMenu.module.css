@@ -1,0 +1,67 @@
+/* UserMenu.module.css */
+.menuContainer {
+    composes: card from '../layout.css';
+    margin-bottom: var(--spacing-lg);
+}
+
+.currentStatus {
+    composes: flex items-center justify-between from '../utils.css';
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--color-gray-200);
+    margin-bottom: var(--spacing-md);
+}
+
+.menuSections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+}
+
+.section {
+    composes: card from '../layout.css';
+    background-color: var(--color-gray-100);
+}
+
+.sectionTitle {
+    margin: 0 0 var(--spacing-md) 0;
+    color: var(--color-gray-700);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.contactsList, .userList {
+    composes: flex flex-col gap-sm from '../utils.css';
+}
+
+.contactButton, .userButton {
+    composes: button button-secondary from '../components.css';
+    text-align: left;
+    width: 100%;
+}
+
+.activeContact, .activeUser {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.currentIndicator {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-500);
+    font-style: italic;
+    margin-left: var(--spacing-sm);
+}
+
+.disconnectButton {
+    composes: button button-danger from '../components.css';
+    margin-right: var(--spacing-sm);
+}
+
+.logoutButton {
+    composes: button button-secondary from '../components.css';
+}
+
+.noContacts {
+    color: var(--color-gray-600);
+    font-style: italic;
+    padding: var(--spacing-sm);
+}

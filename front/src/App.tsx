@@ -1,4 +1,3 @@
-// App.tsx
 import React, { useState } from 'react';
 import { Provider } from 'react-redux';
 import { store } from './store/store';
@@ -10,23 +9,54 @@ import { ConnectUser } from './components/ConnectUser';
 import { DataManager } from './components/DataManagment';
 import { initializeStorage } from './store/fileStorage';
 import { clearChat } from './store/messageSlice';
+import './App.css';
+
+interface StorageState {
+    isInitialized: boolean;
+    error: string | null;
+    hasPermission: boolean;
+}
+
+const InitializationScreen = ({
+                                  error,
+                                  onInitialize
+                              }: {
+    error: string | null;
+    onInitialize: () => void;
+}) => (
+    <div className="initContainer">
+        <h2 className="initTitle">Welcome to Chat App</h2>
+        <p className="initDescription">
+            To get started, please select a directory where your chat messages will be stored.
+        </p>
+        {error && (
+            <div className="errorContainer">
+                <p>{error}</p>
+                <button className="retryButton" onClick={onInitialize}>
+                    Try Again
+                </button>
+            </div>
+        )}
+        {!error && (
+            <button className="initButton" onClick={onInitialize}>
+                Select Storage Directory
+            </button>
+        )}
+    </div>
+);
 
 const AppContent = () => {
+    const dispatch = useAppDispatch();
     const currentUserId = useAppSelector(state => state.messages.currentUserId);
     const connectedToUser = useAppSelector(state => state.messages.connectedToUser);
-    const dispatch = useAppDispatch();
 
-    const [storageState, setStorageState] = useState<{
-        isInitialized: boolean;
-        error: string | null;
-        hasPermission: boolean;
-    }>({
+    const [storageState, setStorageState] = useState<StorageState>({
         isInitialized: false,
         error: null,
         hasPermission: false
     });
 
-    const initializeApp = async () => {
+    const handleInitialize = async () => {
         try {
             await initializeStorage();
             setStorageState({
@@ -37,19 +67,15 @@ const AppContent = () => {
         } catch (error) {
             console.error('Storage initialization error:', error);
 
-            if (error instanceof Error && error.name === 'NotAllowedError') {
-                setStorageState({
-                    isInitialized: false,
-                    error: 'Permission to access file system was denied. Please try again.',
-                    hasPermission: false
-                });
-            } else {
-                setStorageState({
-                    isInitialized: false,
-                    error: 'Failed to initialize storage system. Please try again.',
-                    hasPermission: false
-                });
-            }
+            const errorMessage = error instanceof Error && error.name === 'NotAllowedError'
+                ? 'Permission to access file system was denied. Please try again.'
+                : 'Failed to initialize storage system. Please try again.';
+
+            setStorageState({
+                isInitialized: false,
+                error: errorMessage,
+                hasPermission: false
+            });
 
             dispatch(clearChat());
         }
@@ -57,43 +83,17 @@ const AppContent = () => {
 
     if (!storageState.isInitialized) {
         return (
-            <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
-                <div style={{
-                    textAlign: 'center',
-                    padding: '20px',
-                    backgroundColor: storageState.error ? '#fff3f3' : '#f0f0f0',
-                    borderRadius: '8px'
-                }}>
-                    <h2 style={{ marginBottom: '16px' }}>Welcome to Chat App</h2>
-                    <p style={{ marginBottom: '16px' }}>
-                        To get started, please select a directory where your chat messages will be stored.
-                    </p>
-                    {storageState.error && (
-                        <div style={{ color: '#e53e3e', marginBottom: '16px' }}>
-                            {storageState.error}
-                        </div>
-                    )}
-                    <button
-                        onClick={initializeApp}
-                        style={{
-                            padding: '8px 16px',
-                            backgroundColor: '#3182ce',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '16px'
-                        }}
-                    >
-                        Select Storage Directory
-                    </button>
-                </div>
+            <div className="appContainer">
+                <InitializationScreen
+                    error={storageState.error}
+                    onInitialize={handleInitialize}
+                />
             </div>
         );
     }
 
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
+        <div className="appContainer">
             {!currentUserId ? (
                 <UserSetup />
             ) : (
@@ -115,6 +115,13 @@ const AppContent = () => {
 
 export const App = () => (
     <Provider store={store}>
-        <AppContent />
+        <div className="appWrapper">
+            <header className="appHeader">
+                <h1 className="appTitle">Real-Time Chat</h1>
+            </header>
+            <AppContent />
+        </div>
     </Provider>
 );
+
+export default App;

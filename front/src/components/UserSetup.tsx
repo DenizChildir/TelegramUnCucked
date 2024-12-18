@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppDispatch } from '../hooks/redux';
 import { setCurrentUserAsync } from '../store/messageSlice';
 import { generateShortId, getRecentUsers, StoredUser } from '../store/fileStorage';
-import styles from './UserSetup.module.css';
+import styles from '../styles/modules/UserSetup.module.css';
 
 export const UserSetup = () => {
     const [userId, setUserId] = useState('');

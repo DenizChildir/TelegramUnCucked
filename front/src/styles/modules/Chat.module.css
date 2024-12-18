@@ -1,0 +1,96 @@
+/* Chat.module.css */
+.chatContainer {
+    composes: container from '../layout.css';
+}
+
+.header {
+    composes: card from '../layout.css';
+    margin-bottom: var(--spacing-md);
+}
+
+.messagesContainer {
+    composes: card from '../layout.css';
+    height: 400px;
+    overflow-y: auto;
+    margin-bottom: var(--spacing-md);
+}
+
+.messageWrapper {
+    composes: fade-in from '../animations.css';
+    margin-bottom: var(--spacing-sm);
+}
+
+.messageOutgoing {
+    text-align: right;
+}
+
+.messageIncoming {
+    text-align: left;
+}
+
+.messageBubble {
+    display: inline-block;
+    max-width: 70%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius-lg);
+    word-wrap: break-word;
+}
+
+.messageBubbleOutgoing {
+    background-color: var(--color-primary);
+    color: white;
+    border-top-right-radius: var(--border-radius-sm);
+}
+
+.messageBubbleIncoming {
+    background-color: var(--color-gray-200);
+    color: var(--color-gray-900);
+    border-top-left-radius: var(--border-radius-sm);
+}
+
+.messageTime {
+    font-size: var(--font-size-sm);
+    opacity: 0.8;
+    margin-top: var(--spacing-xs);
+}
+
+.inputForm {
+    composes: flex gap-md from '../utils.css';
+}
+
+.messageInput {
+    composes: input from '../components.css';
+    flex: 1;
+}
+
+.sendButton {
+    composes: button button-primary from '../components.css';
+}
+
+.headerInfo {
+    composes: flex flex-col gap-sm from '../utils.css';
+}
+
+.userInfo {
+    composes: flex items-center gap-sm from '../utils.css';
+}
+
+.userLabel {
+    color: var(--color-gray-600);
+    font-weight: 600;
+}
+
+.userId {
+    background-color: var(--color-gray-200);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    font-family: monospace;
+    font-weight: 600;
+    color: var(--color-gray-800);
+}
+
+.connectionStatus {
+    margin-left: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+}
