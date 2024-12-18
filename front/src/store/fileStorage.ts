@@ -1,6 +1,6 @@
 // fileStorage.ts
 import { Message } from "../types/types";
-
+import type { FileSystemDirectoryHandle } from '../types/fileSystemTypes';
 export interface StoredUser {
     id: string;
     lastActive: string;
@@ -15,14 +15,6 @@ interface StorageStructure {
     messages: { [key: string]: Message[] };
     users: StoredUser[];
     recentContacts: { [userId: string]: RecentContact[] };
-}
-interface FileSystemDirectoryHandle extends FileSystemHandle {
-    kind: 'directory';
-    getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FileSystemDirectoryHandle>;
-    getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>;
-    values(): AsyncIterableIterator<FileSystemHandle>;
-    keys(): AsyncIterableIterator<string>;
-    entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
 }
 
 
@@ -276,18 +268,32 @@ class FileSystemStorage {
     }
 
     async deleteContactHistory(userId: string, contactId: string): Promise<void> {
-        const forwardKey = `${userId}:${contactId}`;
-        const reverseKey = `${contactId}:${userId}`;
+        const messageKey = this.createMessageKey(userId, contactId);
+        const filename = `${messageKey}.json`;
 
-        delete this.cachedData.messages[forwardKey];
-        delete this.cachedData.messages[reverseKey];
+        // Remove from cache
+        const cacheKey = `${userId}:${contactId}`;
+        delete this.cachedData.messages[cacheKey];
 
+        // Delete the file
         const messagesDir = await this.getOrCreateDirectory('messages');
         try {
-            await messagesDir.removeEntry(`${forwardKey}.json`);
-            await messagesDir.removeEntry(`${reverseKey}.json`);
+            await messagesDir.removeEntry(filename);
+            console.log(`Successfully deleted file: ${filename}`);
         } catch (error) {
-            console.error('Error deleting contact history files:', error);
+            console.error(`Error deleting file ${filename}:`, error);
+        }
+
+        // Also clear from recent contacts if present
+        if (this.cachedData.recentContacts[userId]) {
+            this.cachedData.recentContacts[userId] =
+                this.cachedData.recentContacts[userId].filter(
+                    contact => contact.userId !== contactId
+                );
+            await this.writeFile(
+                'contacts/contacts.json',
+                JSON.stringify(this.cachedData.recentContacts)
+            );
         }
     }
 
@@ -350,7 +356,7 @@ class FileSystemStorage {
 // Create a singleton instance
 const fileStorage = new FileSystemStorage();
 
-export type { RecentContact, StoredUser };
+export type { RecentContact};
 
 
 

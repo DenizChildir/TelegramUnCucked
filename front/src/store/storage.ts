@@ -75,22 +75,6 @@ export const getMessages = (userId1: string, userId2: string): Message[] => {
     return sortedMessages;
 };
 
-
-
-export const generateShortId = (): string => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    const timestamp = Date.now().toString(36); // Convert timestamp to base36
-
-    // Add 4 random characters
-    for (let i = 0; i < 4; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-
-    // Combine timestamp and random string to ensure uniqueness
-    return `${result}-${timestamp}`;
-};
-
 export interface StoredUser {
     id: string;
     lastActive: string;
