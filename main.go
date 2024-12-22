@@ -249,11 +249,13 @@ func deliverMessage(msg Message) bool {
 
 		// Send delivery confirmation to sender
 		deliveryConfirmation := Message{
+			ID:        "delivery_" + msg.ID, // Use the original message ID
 			FromID:    msg.ToID,
 			ToID:      msg.FromID,
 			Content:   "delivered",
 			Timestamp: time.Now(),
 			Delivered: true,
+			Status:    "delivered", // Add status
 		}
 
 		clientsMux.RLock()

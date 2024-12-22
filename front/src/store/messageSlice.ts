@@ -69,18 +69,25 @@ const messageSlice = createSlice({
             state.users[action.payload.userId].online = action.payload.online;
         },
         setMessageDelivered(state, action: PayloadAction<string>) {
-            const originalMessageId = action.payload.replace('delivery_', '');
-            const message = state.messages.find(m => m.id === originalMessageId);
+            console.log('Setting message delivered:', action.payload);
+            const message = state.messages.find(m => m.id === action.payload);
             if (message) {
+                console.log('Found message to mark as delivered:', message);
                 message.delivered = true;
                 message.status = 'delivered';
+            } else {
+                console.log('Message not found for delivery, messages in state:', state.messages);
             }
         },
         setMessageRead(state, action: PayloadAction<string>) {
+            console.log('Setting message read:', action.payload);
             const message = state.messages.find(m => m.id === action.payload);
             if (message) {
+                console.log('Found message to mark as read:', message);
                 message.readStatus = true;
                 message.status = 'read';
+            } else {
+                console.log('Message not found for read status, messages in state:', state.messages);
             }
         },
         clearChat(state) {

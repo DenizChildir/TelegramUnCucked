@@ -52,8 +52,10 @@ export const Chat = () => {
             timestamp: new Date().toISOString(),
             delivered: false,
             readStatus: false,
-            status: 'sent'
+            status: 'sent'  // Explicitly set initial status
         };
+
+        console.log('Sending new message:', message);
 
         try {
             await dispatch(addMessageAsync(message)).unwrap();
@@ -105,13 +107,21 @@ export const Chat = () => {
 
                 // Handle delivery confirmations
                 if (message.content === 'delivered') {
-                    dispatch(setMessageDelivered('delivery_' + message.toId));
+                    console.log('Processing delivery confirmation:', message);
+                    // Extract the original message ID from the delivery confirmation ID
+                    const targetMessageId = message.id.startsWith('delivery_')
+                        ? message.id.replace('delivery_', '')
+                        : message.id;
+                    console.log('Setting delivered status for message:', targetMessageId);
+                    dispatch(setMessageDelivered(targetMessageId));
                     return;
                 }
 
+
                 // Handle read receipts
                 if (message.content === 'read') {
-                    dispatch(setMessageRead(message.toId));
+                    console.log('Processing read receipt:', message);
+                    dispatch(setMessageRead(message.id));
                     return;
                 }
 
@@ -237,8 +247,9 @@ export const Chat = () => {
                                     {formatTime(message.timestamp)}
                                     {message.fromId === currentUserId && (
                                         <span className={styles.messageStatus}>
+                                          {console.log(`Message ${message.id} full state:`, message)}
                                             {message.status === 'read' ? '✓✓✓' :
-                                                message.status === 'delivered' ? '✓✓' : '✓'}
+                                                message.status === 'delivered' ? '✓✓' : message.status === 'sent' ? '✓' : '?'}
                                         </span>
                                     )}
                                 </div>
@@ -246,7 +257,7 @@ export const Chat = () => {
                         </div>
                     ))
                 )}
-                <div ref={messagesEndRef} />
+                <div ref={messagesEndRef}/>
             </div>
 
             <form onSubmit={handleSubmit} className={styles.inputForm}>
