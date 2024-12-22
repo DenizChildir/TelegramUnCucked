@@ -90,6 +90,53 @@ export const Chat = () => {
                 console.log('WebSocket connected');
             };
 
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                console.log('Received message:', message);
+
+                // Handle status updates
+                if (message.content === 'status_update') {
+                    dispatch(setUserOnlineStatus({
+                        userId: message.fromId,
+                        online: message.status === 'online'
+                    }));
+                    return;
+                }
+
+                // Handle delivery confirmations
+                if (message.content === 'delivered') {
+                    dispatch(setMessageDelivered('delivery_' + message.toId));
+                    return;
+                }
+
+                // Handle read receipts
+                if (message.content === 'read') {
+                    dispatch(setMessageRead(message.toId));
+                    return;
+                }
+
+                // Handle regular messages
+                if (!messageIdsRef.current.has(message.id)) {
+                    messageIdsRef.current.add(message.id);
+                    dispatch(addMessageAsync(message));
+
+                    // Send delivery confirmation
+                    if (wsRef.current && message.fromId !== currentUserId) {
+                        const deliveryConfirmation = {
+                            id: `delivery_${message.id}`,
+                            fromId: currentUserId,
+                            toId: message.fromId,
+                            content: 'delivered',
+                            timestamp: new Date().toISOString(),
+                            delivered: true,
+                            readStatus: false,
+                            status: 'sent'
+                        };
+                        wsRef.current.send(JSON.stringify(deliveryConfirmation));
+                    }
+                }
+            };
+
             ws.onclose = (event) => {
                 setIsConnected(false);
                 console.log('WebSocket disconnected with code:', event.code);
@@ -147,6 +194,13 @@ export const Chat = () => {
 
         loadMessages();
     }, [currentUserId, connectedToUser, dispatch]);
+
+    // Scroll to bottom effect
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages]);
 
     return (
         <div className={styles.chatContainer}>
