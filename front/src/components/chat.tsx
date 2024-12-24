@@ -5,7 +5,7 @@ import {
     setMessageDelivered,
     setMessageRead,
     setUserOnlineStatus,
-    initializeMessagesAsync
+    initializeMessagesAsync, initializeAllMessagesAsync
 } from '../store/messageSlice';
 import { Message } from '../types/types';
 import styles from '../styles/modules/Chat.module.css';
@@ -29,8 +29,12 @@ export const Chat = () => {
     const isUserOnline = connectedToUser ? users[connectedToUser]?.online : false;
 
     const conversationMessages = messages.filter(msg =>
-        (msg.fromId === currentUserId && msg.toId === connectedToUser) ||
-        (msg.fromId === connectedToUser && msg.toId === currentUserId)
+        connectedToUser ? (
+            (msg.fromId === currentUserId && msg.toId === connectedToUser) ||
+            (msg.fromId === connectedToUser && msg.toId === currentUserId)
+        ) : (
+            msg.fromId === currentUserId || msg.toId === currentUserId
+        )
     );
 
     const formatTime = (timestamp: string) => {
@@ -68,7 +72,28 @@ export const Chat = () => {
         }
     };
 
-    // WebSocket connection effect
+    // In Chat.tsx, update the loadMessages useEffect
+
+    useEffect(() => {
+        const loadMessages = async () => {
+            if (!currentUserId) return;
+
+            setIsLoading(true);
+            try {
+                await dispatch(initializeAllMessagesAsync(currentUserId)).unwrap();
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                setError('Failed to load messages');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadMessages();
+    }, [currentUserId, dispatch]);
+
+    //In Chat.tsx, update the WebSocket useEffect
+
     useEffect(() => {
         if (!currentUserId) return;
 
@@ -82,14 +107,15 @@ export const Chat = () => {
                 return;
             }
 
+            console.log('Attempting WebSocket connection...');
             const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
             wsRef.current = ws;
 
             ws.onopen = () => {
+                console.log('WebSocket connected successfully');
                 setIsConnected(true);
                 setError(null);
-                retryCount = 0; // Reset retry count on successful connection
-                console.log('WebSocket connected');
+                retryCount = 0;
             };
 
             ws.onmessage = (event) => {
@@ -116,7 +142,6 @@ export const Chat = () => {
                     dispatch(setMessageDelivered(targetMessageId));
                     return;
                 }
-
 
                 // Handle read receipts
                 if (message.content === 'read') {
@@ -178,7 +203,7 @@ export const Chat = () => {
         return () => {
             clearTimeout(reconnectTimeout);
             if (wsRef.current) {
-                wsRef.current.close(1000, 'Component unmounting'); // Clean close
+                wsRef.current.close(1000, 'Component unmounting');
             }
         };
     }, [currentUserId, dispatch]);

@@ -26,6 +26,15 @@ const initialState: MessageState = {
     error: null
 };
 
+export const initializeAllMessagesAsync = createAsyncThunk(
+    'messages/initializeAllMessagesAsync',
+    async (userId: string) => {
+        // Get all messages for the user
+        const allMessages = await fileStorage.getAllMessages(userId);
+        return allMessages;
+    }
+);
+
 // Async thunks
 export const setCurrentUserAsync = createAsyncThunk(
     'messages/setCurrentUserAsync',
@@ -143,6 +152,18 @@ const messageSlice = createSlice({
         });
         builder.addCase(addMessageAsync.rejected, (state, action) => {
             state.error = action.error.message || 'Failed to save message';
+        });
+        builder.addCase(initializeAllMessagesAsync.pending, (state) => {
+            state.loading = true;
+            state.error = null;
+        });
+        builder.addCase(initializeAllMessagesAsync.fulfilled, (state, action) => {
+            state.messages = action.payload;
+            state.loading = false;
+        });
+        builder.addCase(initializeAllMessagesAsync.rejected, (state, action) => {
+            state.loading = false;
+            state.error = action.error.message || 'Failed to load messages';
         });
     }
 });

@@ -54,17 +54,20 @@ func main() {
 
 	// Routes
 	app.Use("/ws/:id", func(c *fiber.Ctx) error {
-		// Enable WebSocket upgrade for all paths
+		log.Printf("Received WebSocket connection request from user: %s", c.Params("id"))
 		if websocket.IsWebSocketUpgrade(c) {
+			log.Printf("WebSocket upgrade requested for user: %s", c.Params("id"))
 			c.Locals("allowed", true)
 			return c.Next()
 		}
+		log.Printf("Non-WebSocket request received on WebSocket endpoint for user: %s", c.Params("id"))
 		return fiber.ErrUpgradeRequired
 	})
 
 	app.Get("/ws/:id", websocket.New(handleWebSocket))
 	app.Get("/generate-id", handleGenerateID)
 	app.Get("/status/:id", handleUserStatus)
+	app.Get("/messages/:userId", handleGetAllMessages)
 
 	log.Printf("Server starting on :3000")
 	log.Fatal(app.Listen(":3000"))
@@ -95,6 +98,45 @@ func initDB() {
 	}
 }
 
+func handleGetAllMessages(c *fiber.Ctx) error {
+	userID := c.Params("userId")
+
+	query := `
+    SELECT id, from_id, to_id, content, timestamp, delivered, read_status
+    FROM messages
+    WHERE from_id = ? OR to_id = ?
+    ORDER BY timestamp ASC
+    `
+
+	rows, err := db.Query(query, userID, userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to fetch messages",
+		})
+	}
+	defer rows.Close()
+
+	var messages []Message
+	for rows.Next() {
+		var msg Message
+		err := rows.Scan(
+			&msg.ID,
+			&msg.FromID,
+			&msg.ToID,
+			&msg.Content,
+			&msg.Timestamp,
+			&msg.Delivered,
+			&msg.ReadStatus,
+		)
+		if err != nil {
+			continue
+		}
+		messages = append(messages, msg)
+	}
+
+	return c.JSON(messages)
+}
+
 func handleGenerateID(c *fiber.Ctx) error {
 	// Generate a 4-character ID
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -120,6 +162,7 @@ func handleUserStatus(c *fiber.Ctx) error {
 
 func handleWebSocket(c *websocket.Conn) {
 	userID := c.Params("id")
+	log.Printf("New WebSocket connection established for user: %s", userID)
 
 	// Register new client
 	client := &Client{
@@ -130,14 +173,19 @@ func handleWebSocket(c *websocket.Conn) {
 
 	clientsMux.Lock()
 	clients[userID] = client
+	log.Printf("Registered client. Total connected clients: %d", len(clients))
 	clientsMux.Unlock()
 
 	// Broadcast that user is online
+	log.Printf("Broadcasting online status for user: %s", userID)
 	broadcastUserStatus(userID, true)
 
-	// Send offline messages when user connects
-	sendOfflineMessages(userID)
-	// Send current online users status to the newly connected client
+	// Send all messages
+	log.Printf("Sending all messages for user: %s", userID)
+	sendAllMessages(userID)
+
+	// Send current online users status
+	log.Printf("Sending online users status to user: %s", userID)
 	sendCurrentOnlineUsers(client)
 
 	// WebSocket message handling loop
@@ -205,6 +253,110 @@ func broadcastUserStatus(userID string, online bool) {
 		}
 	}
 }
+
+func sendAllMessages(userID string) {
+	query := `
+    SELECT id, from_id, to_id, content, timestamp, delivered, read_status
+    FROM messages
+    WHERE from_id = ? OR to_id = ?
+    ORDER BY timestamp ASC
+    `
+
+	rows, err := db.Query(query, userID, userID)
+	if err != nil {
+		log.Printf("Error querying all messages: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	clientsMux.RLock()
+	recipient := clients[userID]
+	clientsMux.RUnlock()
+
+	if recipient == nil {
+		return
+	}
+
+	// Prepare a transaction for updating message status
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Error starting transaction: %v", err)
+		return
+	}
+
+	updateStmt, err := tx.Prepare(`
+        UPDATE messages
+        SET delivered = true
+        WHERE id = ? AND to_id = ? AND delivered = false
+    `)
+	if err != nil {
+		log.Printf("Error preparing update statement: %v", err)
+		tx.Rollback()
+		return
+	}
+	defer updateStmt.Close()
+
+	for rows.Next() {
+		var msg Message
+		err := rows.Scan(
+			&msg.ID,
+			&msg.FromID,
+			&msg.ToID,
+			&msg.Content,
+			&msg.Timestamp,
+			&msg.Delivered,
+			&msg.ReadStatus,
+		)
+		if err != nil {
+			log.Printf("Error scanning message: %v", err)
+			continue
+		}
+
+		// Send message to user
+		err = recipient.Conn.WriteJSON(msg)
+		if err != nil {
+			log.Printf("Error sending message: %v", err)
+			continue
+		}
+
+		// If this is a received message that hasn't been delivered yet
+		if msg.ToID == userID && !msg.Delivered {
+			// Mark as delivered in database
+			_, err = updateStmt.Exec(msg.ID, userID)
+			if err != nil {
+				log.Printf("Error updating message status: %v", err)
+				continue
+			}
+
+			// Send delivery confirmation to original sender
+			deliveryConfirmation := Message{
+				ID:        "delivery_" + msg.ID,
+				FromID:    msg.ToID,
+				ToID:      msg.FromID,
+				Content:   "delivered",
+				Timestamp: time.Now(),
+				Delivered: true,
+				Status:    "delivered",
+			}
+
+			clientsMux.RLock()
+			sender := clients[msg.FromID]
+			clientsMux.RUnlock()
+
+			if sender != nil {
+				sender.Conn.WriteJSON(deliveryConfirmation)
+			}
+		}
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %v", err)
+		tx.Rollback()
+	}
+}
+
 func sendCurrentOnlineUsers(newClient *Client) {
 	clientsMux.RLock()
 	defer clientsMux.RUnlock()

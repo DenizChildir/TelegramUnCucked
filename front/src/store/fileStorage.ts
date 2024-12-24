@@ -370,6 +370,36 @@ class FileSystemStorage {
     getRecentContacts(userId: string): RecentContact[] {
         return this.cachedData.recentContacts[userId] || [];
     }
+
+    async getAllMessages(userId: string): Promise<Message[]> {
+        try {
+            const messagesDir = await this.getOrCreateDirectory('messages');
+            let allMessages: Message[] = [];
+
+            // List all files in messages directory
+            for await (const entry of messagesDir.values()) {
+                if (entry.kind === 'file' && entry.name.endsWith('.json')) {
+                    // Check if file involves the current user
+                    const messageKey = this.parseMessageKey(entry.name);
+                    if (messageKey && (messageKey.fromId === userId || messageKey.toId === userId)) {
+                        const fileHandle = await messagesDir.getFileHandle(entry.name);
+                        const file = await fileHandle.getFile();
+                        const content = await file.text();
+                        const messages: Message[] = JSON.parse(content);
+                        allMessages = allMessages.concat(messages);
+                    }
+                }
+            }
+
+            // Sort messages by timestamp
+            return allMessages.sort((a, b) =>
+                new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            );
+        } catch (error) {
+            console.error('Error loading all messages:', error);
+            return [];
+        }
+    }
 }
 
 // Create a singleton instance
@@ -438,4 +468,9 @@ export const generateShortId = (): string => {
     }
 
     return `${result}-${timestamp}`;
+};
+
+export const getAllMessages = async (userId: string) => {
+    await fileStorage.initialize();
+    return fileStorage.getAllMessages(userId);
 };
