@@ -68,6 +68,7 @@ func main() {
 	app.Get("/generate-id", handleGenerateID)
 	app.Get("/status/:id", handleUserStatus)
 	app.Get("/messages/:userId", handleGetAllMessages)
+	app.Delete("/messages/:userId/:contactId", handleDeleteMessages)
 
 	log.Printf("Server starting on :3000")
 	log.Fatal(app.Listen(":3000"))
@@ -82,20 +83,62 @@ func initDB() {
 
 	// Create messages table if it doesn't exist
 	createTableSQL := `
-	CREATE TABLE IF NOT EXISTS messages (
-		id TEXT PRIMARY KEY,
-		from_id TEXT,
-		to_id TEXT,
-		content TEXT,
-		timestamp DATETIME,
-		delivered BOOLEAN,
-		read_status BOOLEAN
-	);`
+    CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        from_id TEXT,
+        to_id TEXT,
+        content TEXT,
+        timestamp DATETIME,
+        delivered BOOLEAN,
+        read_status BOOLEAN,
+        status TEXT DEFAULT 'sent'
+    );`
 
 	_, err = db.Exec(createTableSQL)
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func handleDeleteMessages(c *fiber.Ctx) error {
+	userID := c.Params("userId")
+	contactID := c.Params("contactId")
+
+	// Start a transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to start transaction",
+		})
+	}
+
+	// Delete messages in both directions
+	deleteQuery := `
+        DELETE FROM messages 
+        WHERE (from_id = ? AND to_id = ?) 
+           OR (from_id = ? AND to_id = ?)
+    `
+
+	_, err = tx.Exec(deleteQuery, userID, contactID, contactID, userID)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to delete messages",
+		})
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to commit transaction",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+	})
 }
 
 func handleGetAllMessages(c *fiber.Ctx) error {
@@ -197,12 +240,21 @@ func handleWebSocket(c *websocket.Conn) {
 			break
 		}
 
-		msg.Timestamp = time.Now()
+		// Ensure timestamp is set
+		if msg.Timestamp.IsZero() {
+			msg.Timestamp = time.Now()
+		}
+
+		// Ensure status is set
+		if msg.Status == "" {
+			msg.Status = "sent"
+		}
 
 		switch msg.Content {
 		case "delivered":
 			// Handle delivery confirmation
 			updateMessageStatus(msg.ToID, true, false)
+			msg.Status = "delivered"
 			delivered := deliverMessage(msg)
 			if !delivered {
 				storeMessage(msg)
@@ -210,12 +262,12 @@ func handleWebSocket(c *websocket.Conn) {
 		case "read":
 			// Handle read receipt
 			updateMessageStatus(msg.ToID, true, true)
+			msg.Status = "read"
 			delivered := deliverMessage(msg)
 			if !delivered {
 				storeMessage(msg)
 			}
 		default:
-			msg.Status = "sent"
 			delivered := deliverMessage(msg)
 			if !delivered {
 				storeMessage(msg)
@@ -425,9 +477,9 @@ func deliverMessage(msg Message) bool {
 
 func storeMessage(msg Message) {
 	query := `
-	INSERT INTO messages (id, from_id, to_id, content, timestamp, delivered, read_status)
-	VALUES (?, ?, ?, ?, ?, ?, ?)
-	`
+    INSERT INTO messages (id, from_id, to_id, content, timestamp, delivered, read_status, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `
 
 	_, err := db.Exec(query,
 		msg.ID,
@@ -437,6 +489,7 @@ func storeMessage(msg Message) {
 		msg.Timestamp,
 		msg.Delivered,
 		msg.ReadStatus,
+		msg.Status,
 	)
 
 	if err != nil {

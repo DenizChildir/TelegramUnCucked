@@ -28,14 +28,21 @@ export const Chat = () => {
 
     const isUserOnline = connectedToUser ? users[connectedToUser]?.online : false;
 
-    const conversationMessages = messages.filter(msg =>
-        connectedToUser ? (
-            (msg.fromId === currentUserId && msg.toId === connectedToUser) ||
-            (msg.fromId === connectedToUser && msg.toId === currentUserId)
-        ) : (
-            msg.fromId === currentUserId || msg.toId === currentUserId
+    const conversationMessages = messages
+        .filter(msg =>
+            // Filter out system messages and ensure valid conversation participants
+            msg.content !== 'delivered' &&
+            msg.content !== 'read' &&
+            msg.content !== 'status_update' &&
+            ((msg.fromId === currentUserId && msg.toId === connectedToUser) ||
+                (msg.fromId === connectedToUser && msg.toId === currentUserId))
         )
-    );
+        .map(msg => ({
+            ...msg,
+            // Ensure message always has a valid status
+            status: msg.status || (msg.readStatus ? 'read' : (msg.delivered ? 'delivered' : 'sent'))
+        }));
+
 
     const formatTime = (timestamp: string) => {
         return new Date(timestamp).toLocaleTimeString([], {
@@ -272,10 +279,10 @@ export const Chat = () => {
                                     {formatTime(message.timestamp)}
                                     {message.fromId === currentUserId && (
                                         <span className={styles.messageStatus}>
-                                          {console.log(`Message ${message.id} full state:`, message)}
-                                            {message.status === 'read' ? '✓✓✓' :
-                                                message.status === 'delivered' ? '✓✓' : message.status === 'sent' ? '✓' : '?'}
-                                        </span>
+                                 {message.status === 'read' ? '✓✓✓' :
+                               message.status === 'delivered' ? '✓✓' :
+                                 message.status === 'sent' ? '✓' : '✓'}
+                                    </span>
                                     )}
                                 </div>
                             </div>

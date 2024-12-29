@@ -286,33 +286,59 @@ class FileSystemStorage {
         }
     }
 
+
     async deleteContactHistory(userId: string, contactId: string): Promise<void> {
+        // First, delete from the backend
+        try {
+            const response = await fetch(`http://localhost:3000/messages/${userId}/${contactId}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete messages from server');
+            }
+        } catch (error) {
+            console.error('Error deleting messages from server:', error);
+            throw error;
+        }
+
+        // Then proceed with local cleanup
         const messageKey = this.createMessageKey(userId, contactId);
         const filename = `${messageKey}.json`;
 
         // Remove from cache
-        const cacheKey = `${userId}:${contactId}`;
-        delete this.cachedData.messages[cacheKey];
+        const cacheKey1 = `${userId}:${contactId}`;
+        const cacheKey2 = `${contactId}:${userId}`;
+        delete this.cachedData.messages[cacheKey1];
+        delete this.cachedData.messages[cacheKey2];
 
-        // Delete the file
+        // Delete local files
         const messagesDir = await this.getOrCreateDirectory('messages');
         try {
             await messagesDir.removeEntry(filename);
-            console.log(`Successfully deleted file: ${filename}`);
-        } catch (error) {
-            console.error(`Error deleting file ${filename}:`, error);
-        }
 
-        // Also clear from recent contacts if present
-        if (this.cachedData.recentContacts[userId]) {
-            this.cachedData.recentContacts[userId] =
-                this.cachedData.recentContacts[userId].filter(
-                    contact => contact.userId !== contactId
+            // Try to delete the reverse direction file as well
+            const filename2 = `${this.createMessageKey(contactId, userId)}.json`;
+            try {
+                await messagesDir.removeEntry(filename2);
+            } catch (error) {
+                // Ignore error if reverse file doesn't exist
+            }
+
+            // Update recent contacts
+            if (this.cachedData.recentContacts[userId]) {
+                this.cachedData.recentContacts[userId] =
+                    this.cachedData.recentContacts[userId].filter(
+                        contact => contact.userId !== contactId
+                    );
+                await this.writeFile(
+                    'contacts/contacts.json',
+                    JSON.stringify(this.cachedData.recentContacts)
                 );
-            await this.writeFile(
-                'contacts/contacts.json',
-                JSON.stringify(this.cachedData.recentContacts)
-            );
+            }
+        } catch (error) {
+            console.error('Error deleting contact history:', error);
+            throw error;
         }
     }
 
