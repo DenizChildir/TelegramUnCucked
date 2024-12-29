@@ -10,6 +10,12 @@ interface MessageState {
     users: { [key: string]: User };
     loading: boolean;
     error: string | null;
+    isWebSocketConnected: boolean;
+    messageQueue: {
+        pending: Message[];    // Messages waiting to be sent
+        failed: Message[];     // Messages that failed to send
+        retrying: Message[];   // Messages being retried
+    };
 }
 
 interface User {
@@ -23,8 +29,23 @@ const initialState: MessageState = {
     connectedToUser: null,
     users: {},
     loading: false,
-    error: null
+    error: null,
+    isWebSocketConnected: false,
+    messageQueue: {
+        pending: [],
+        failed: [],
+        retrying: []
+    }
 };
+
+// New thunk for handling message queuing
+export const queueMessageAsync = createAsyncThunk(
+    'messages/queueMessageAsync',
+    async (message: Message) => {
+        await fileStorage.saveMessage(message);
+        return message;
+    }
+);
 
 export const initializeAllMessagesAsync = createAsyncThunk(
     'messages/initializeAllMessagesAsync',
@@ -54,8 +75,27 @@ export const initializeMessagesAsync = createAsyncThunk(
 
 export const addMessageAsync = createAsyncThunk(
     'messages/addMessageAsync',
-    async (message: Message) => {
+    async (message: Message, { dispatch, getState }) => {
+        const state = getState() as { messages: MessageState };
+        const isConnected = state.messages.isWebSocketConnected;
+
+        if (!isConnected) {
+            // If not connected, queue the message
+            await dispatch(queueMessageAsync(message));
+            return { message, queued: true };
+        }
+
+        // If connected, send immediately
         await fileStorage.saveMessage(message);
+        return { message, queued: false };
+    }
+);
+
+// New thunk for retrying failed messages
+export const retryFailedMessageAsync = createAsyncThunk(
+    'messages/retryFailedMessageAsync',
+    async (message: Message, { dispatch }) => {
+        await dispatch(addMessageAsync(message));
         return message;
     }
 );
@@ -64,9 +104,12 @@ const messageSlice = createSlice({
     name: 'messages',
     initialState,
     reducers: {
+        setWebSocketConnected(state, action: PayloadAction<boolean>) {
+            state.isWebSocketConnected = action.payload;
+        },
         setConnectedUser(state, action: PayloadAction<string | null>) {
             state.connectedToUser = action.payload;
-            state.messages = []; // Clear messages when changing users
+            state.messages = [];
         },
         setUserOnlineStatus(state, action: PayloadAction<{ userId: string; online: boolean }>) {
             if (!state.users[action.payload.userId]) {
@@ -78,25 +121,22 @@ const messageSlice = createSlice({
             state.users[action.payload.userId].online = action.payload.online;
         },
         setMessageDelivered(state, action: PayloadAction<string>) {
-            console.log('Setting message delivered:', action.payload);
             const message = state.messages.find(m => m.id === action.payload);
             if (message) {
-                console.log('Found message to mark as delivered:', message);
                 message.delivered = true;
                 message.status = 'delivered';
-            } else {
-                console.log('Message not found for delivery, messages in state:', state.messages);
+            }
+            // Also check and update queued messages
+            const queuedMessage = state.messageQueue.pending.find(m => m.id === action.payload);
+            if (queuedMessage) {
+                state.messageQueue.pending = state.messageQueue.pending.filter(m => m.id !== action.payload);
             }
         },
         setMessageRead(state, action: PayloadAction<string>) {
-            console.log('Setting message read:', action.payload);
             const message = state.messages.find(m => m.id === action.payload);
             if (message) {
-                console.log('Found message to mark as read:', message);
                 message.readStatus = true;
                 message.status = 'read';
-            } else {
-                console.log('Message not found for read status, messages in state:', state.messages);
             }
         },
         clearChat(state) {
@@ -104,12 +144,59 @@ const messageSlice = createSlice({
             state.connectedToUser = null;
             state.currentUserId = null;
             state.users = {};
+            state.messageQueue = {
+                pending: [],
+                failed: [],
+                retrying: []
+            };
+        },
+        moveToFailedQueue(state, action: PayloadAction<string>) {
+            const pendingMessage = state.messageQueue.pending.find(m => m.id === action.payload);
+            if (pendingMessage) {
+                state.messageQueue.pending = state.messageQueue.pending.filter(m => m.id !== action.payload);
+                state.messageQueue.failed.push(pendingMessage);
+            }
+        },
+        removeFromQueue(state, action: PayloadAction<string>) {
+            state.messageQueue.pending = state.messageQueue.pending.filter(m => m.id !== action.payload);
+            state.messageQueue.failed = state.messageQueue.failed.filter(m => m.id !== action.payload);
+            state.messageQueue.retrying = state.messageQueue.retrying.filter(m => m.id !== action.payload);
         },
         clearError(state) {
             state.error = null;
         }
     },
     extraReducers: (builder) => {
+        builder.addCase(queueMessageAsync.fulfilled, (state, action) => {
+            state.messageQueue.pending.push(action.payload);
+        });
+
+        // Handle addMessageAsync
+        builder.addCase(addMessageAsync.fulfilled, (state, action) => {
+            const { message, queued } = action.payload;
+            if (!queued && message.content !== 'delivered') {
+                const existingMessageIndex = state.messages.findIndex(msg => msg.id === message.id);
+                if (existingMessageIndex === -1) {
+                    state.messages.push({
+                        ...message,
+                        status: message.status || 'sent'
+                    });
+                }
+            }
+        });
+
+        // Handle retryFailedMessageAsync
+        builder.addCase(retryFailedMessageAsync.pending, (state, action) => {
+            const messageId = action.meta.arg.id;
+            state.messageQueue.failed = state.messageQueue.failed.filter(m => m.id !== messageId);
+            state.messageQueue.retrying.push(action.meta.arg);
+        });
+        builder.addCase(retryFailedMessageAsync.fulfilled, (state, action) => {
+            state.messageQueue.retrying = state.messageQueue.retrying.filter(m => m.id !== action.payload.id);
+        });
+
+
+
         // Handle setCurrentUserAsync
         builder.addCase(setCurrentUserAsync.pending, (state) => {
             state.loading = true;
@@ -142,14 +229,6 @@ const messageSlice = createSlice({
         builder.addCase(addMessageAsync.pending, (state) => {
             state.error = null;
         });
-        builder.addCase(addMessageAsync.fulfilled, (state, action) => {
-            if (action.payload.content !== 'delivered') {
-                state.messages.push({
-                    ...action.payload,
-                    status: action.payload.status || 'sent'
-                });
-            }
-        });
         builder.addCase(addMessageAsync.rejected, (state, action) => {
             state.error = action.error.message || 'Failed to save message';
         });
@@ -174,7 +253,10 @@ export const {
     setMessageDelivered,
     setMessageRead,
     clearChat,
-    clearError
+    clearError,
+    setWebSocketConnected,
+    moveToFailedQueue,
+    removeFromQueue
 } = messageSlice.actions;
 
 export default messageSlice.reducer;

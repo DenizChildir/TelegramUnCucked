@@ -10,6 +10,7 @@ import { DataManager } from './components/DataManagment';
 import { initializeStorage } from './store/fileStorage';
 import { clearChat } from './store/messageSlice';
 import './App.css';
+import {WebSocketManager} from "./components/WebSocketManager.tsx";
 
 interface StorageState {
     isInitialized: boolean;
@@ -46,10 +47,8 @@ const InitializationScreen = ({
 );
 
 const AppContent = () => {
-    const dispatch = useAppDispatch();
     const currentUserId = useAppSelector(state => state.messages.currentUserId);
     const connectedToUser = useAppSelector(state => state.messages.connectedToUser);
-
     const [storageState, setStorageState] = useState<StorageState>({
         isInitialized: false,
         error: null,
@@ -91,23 +90,22 @@ const AppContent = () => {
             </div>
         );
     }
-
     return (
         <div className="appContainer">
             {!currentUserId ? (
-                <UserSetup />
+                <UserSetup/>
             ) : (
-                <>
-                    <UserMenu />
+                <WebSocketManager>
+                    <UserMenu/>
                     {!connectedToUser ? (
-                        <ConnectUser />
+                        <ConnectUser/>
                     ) : (
                         <>
-                            <DataManager />
-                            <Chat />
+                            <DataManager/>
+                            <Chat/>
                         </>
                     )}
-                </>
+                </WebSocketManager>
             )}
         </div>
     );
