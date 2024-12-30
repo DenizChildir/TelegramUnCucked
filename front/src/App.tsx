@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// App.tsx
+import React, { useState, useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { store } from './store/store';
 import { UserSetup } from './components/UserSetup';
@@ -7,10 +8,10 @@ import { useAppSelector, useAppDispatch } from './hooks/redux';
 import { UserMenu } from './components/UserMenu';
 import { ConnectUser } from './components/ConnectUser';
 import { DataManager } from './components/DataManagment';
+import { WebSocketManager } from './components/WebSocketManager';
 import { initializeStorage } from './store/fileStorage';
-import { clearChat } from './store/messageSlice';
+import { initializeAllMessagesAsync } from './store/messageSlice';
 import './App.css';
-import {WebSocketManager} from "./components/WebSocketManager.tsx";
 
 interface StorageState {
     isInitialized: boolean;
@@ -47,6 +48,7 @@ const InitializationScreen = ({
 );
 
 const AppContent = () => {
+    const dispatch = useAppDispatch();
     const currentUserId = useAppSelector(state => state.messages.currentUserId);
     const connectedToUser = useAppSelector(state => state.messages.connectedToUser);
     const [storageState, setStorageState] = useState<StorageState>({
@@ -54,6 +56,7 @@ const AppContent = () => {
         error: null,
         hasPermission: false
     });
+    const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
     const handleInitialize = async () => {
         try {
@@ -65,7 +68,6 @@ const AppContent = () => {
             });
         } catch (error) {
             console.error('Storage initialization error:', error);
-
             const errorMessage = error instanceof Error && error.name === 'NotAllowedError'
                 ? 'Permission to access file system was denied. Please try again.'
                 : 'Failed to initialize storage system. Please try again.';
@@ -75,10 +77,26 @@ const AppContent = () => {
                 error: errorMessage,
                 hasPermission: false
             });
-
-            dispatch(clearChat());
         }
     };
+
+    // Load all messages when user logs in
+    useEffect(() => {
+        const loadAllMessages = async () => {
+            if (!currentUserId || isLoadingMessages) return;
+
+            setIsLoadingMessages(true);
+            try {
+                await dispatch(initializeAllMessagesAsync(currentUserId)).unwrap();
+            } catch (error) {
+                console.error('Error loading all messages:', error);
+            } finally {
+                setIsLoadingMessages(false);
+            }
+        };
+
+        loadAllMessages();
+    }, [currentUserId, dispatch]);
 
     if (!storageState.isInitialized) {
         return (
@@ -90,23 +108,30 @@ const AppContent = () => {
             </div>
         );
     }
-    return (
-        <div className="appContainer">
-            {!currentUserId ? (
-                <UserSetup/>
-            ) : (
+
+    // Wrap authenticated content in WebSocketManager
+    if (currentUserId) {
+        return (
+            <div className="appContainer">
                 <WebSocketManager>
-                    <UserMenu/>
+                    <UserMenu />
                     {!connectedToUser ? (
-                        <ConnectUser/>
+                        <ConnectUser />
                     ) : (
                         <>
-                            <DataManager/>
-                            <Chat/>
+                            <DataManager />
+                            <Chat />
                         </>
                     )}
                 </WebSocketManager>
-            )}
+            </div>
+        );
+    }
+
+    // Show setup screen for unauthenticated users
+    return (
+        <div className="appContainer">
+            <UserSetup />
         </div>
     );
 };

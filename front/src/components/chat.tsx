@@ -1,13 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+// Chat.tsx
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
+import { useWebSocket } from './WebSocketManager';
 import {
     addMessageAsync,
-    setMessageDelivered,
     setMessageRead,
-    setUserOnlineStatus,
-    initializeMessagesAsync, initializeAllMessagesAsync
+    initializeMessagesAsync
 } from '../store/messageSlice';
 import { Message } from '../types/types';
+import { MessageProcessor } from '../service/messageProcessor';
 import styles from '../styles/modules/Chat.module.css';
 
 export const Chat = () => {
@@ -15,22 +16,22 @@ export const Chat = () => {
     const currentUserId = useAppSelector(state => state.messages.currentUserId);
     const connectedToUser = useAppSelector(state => state.messages.connectedToUser);
     const messages = useAppSelector(state => state.messages.messages);
+    const isConnected = useAppSelector(state => state.messages.isWebSocketConnected);
     const users = useAppSelector(state => state.messages.users);
 
     const [messageText, setMessageText] = useState('');
-    const [isConnected, setIsConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const wsRef = useRef<WebSocket | null>(null);
-    const messageIdsRef = useRef(new Set<string>());
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const { ws, messageProcessor } = useWebSocket();
+    const visibilityTimeoutRef = useRef<NodeJS.Timeout>();
 
     const isUserOnline = connectedToUser ? users[connectedToUser]?.online : false;
 
+    // Filter and prepare messages for display
     const conversationMessages = messages
         .filter(msg =>
-            // Filter out system messages and ensure valid conversation participants
             msg.content !== 'delivered' &&
             msg.content !== 'read' &&
             msg.content !== 'status_update' &&
@@ -39,181 +40,53 @@ export const Chat = () => {
         )
         .map(msg => ({
             ...msg,
-            // Ensure message always has a valid status
             status: msg.status || (msg.readStatus ? 'read' : (msg.delivered ? 'delivered' : 'sent'))
         }));
 
+    // Handle message visibility and read status
+    const handleVisibilityChange = useCallback(() => {
+        if (document.visibilityState === 'visible') {
+            // Mark received messages as read when chat becomes visible
+            const unreadMessages = conversationMessages
+                .filter(msg =>
+                    msg.fromId === connectedToUser &&
+                    !msg.readStatus &&
+                    msg.delivered
+                );
 
-    const formatTime = (timestamp: string) => {
-        return new Date(timestamp).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!messageText.trim() || !wsRef.current || !connectedToUser || !isConnected) return;
-
-        const message: Message = {
-            id: crypto.randomUUID(),
-            fromId: currentUserId!,
-            toId: connectedToUser,
-            content: messageText.trim(),
-            timestamp: new Date().toISOString(),
-            delivered: false,
-            readStatus: false,
-            status: 'sent'  // Explicitly set initial status
-        };
-
-        console.log('Sending new message:', message);
-
-        try {
-            await dispatch(addMessageAsync(message)).unwrap();
-            wsRef.current.send(JSON.stringify(message));
-            setMessageText('');
-            setError(null);
-        } catch (error) {
-            console.error('Error sending message:', error);
-            setError('Failed to send message. Please try again.');
+            unreadMessages.forEach(msg => {
+                if (ws && messageProcessor) {
+                    const readReceipt: Message = {
+                        id: msg.id,
+                        fromId: currentUserId!,
+                        toId: msg.fromId,
+                        content: 'read',
+                        timestamp: new Date().toISOString(),
+                        delivered: true,
+                        readStatus: true,
+                        status: 'read'
+                    };
+                    messageProcessor.sendMessage(readReceipt);
+                }
+                dispatch(setMessageRead(msg.id));
+            });
         }
-    };
+    }, [dispatch, currentUserId, connectedToUser, conversationMessages]);
 
-    // In Chat.tsx, update the loadMessages useEffect
-
+    // Initialize visibility change listener
     useEffect(() => {
-        const loadMessages = async () => {
-            if (!currentUserId) return;
-
-            setIsLoading(true);
-            try {
-                await dispatch(initializeAllMessagesAsync(currentUserId)).unwrap();
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                setError('Failed to load messages');
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        loadMessages();
-    }, [currentUserId, dispatch]);
-
-    //In Chat.tsx, update the WebSocket useEffect
-
-    useEffect(() => {
-        if (!currentUserId) return;
-
-        let reconnectTimeout: NodeJS.Timeout;
-        const MAX_RETRIES = 3;
-        let retryCount = 0;
-
-        const connectWebSocket = () => {
-            if (retryCount >= MAX_RETRIES) {
-                setError('Failed to connect after multiple attempts');
-                return;
-            }
-
-            console.log('Attempting WebSocket connection...');
-            const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
-            wsRef.current = ws;
-
-            ws.onopen = () => {
-                console.log('WebSocket connected successfully');
-                setIsConnected(true);
-                setError(null);
-                retryCount = 0;
-            };
-
-            ws.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-                console.log('Received message:', message);
-
-                // Handle status updates
-                if (message.content === 'status_update') {
-                    dispatch(setUserOnlineStatus({
-                        userId: message.fromId,
-                        online: message.status === 'online'
-                    }));
-                    return;
-                }
-
-                // Handle delivery confirmations
-                if (message.content === 'delivered') {
-                    console.log('Processing delivery confirmation:', message);
-                    // Extract the original message ID from the delivery confirmation ID
-                    const targetMessageId = message.id.startsWith('delivery_')
-                        ? message.id.replace('delivery_', '')
-                        : message.id;
-                    console.log('Setting delivered status for message:', targetMessageId);
-                    dispatch(setMessageDelivered(targetMessageId));
-                    return;
-                }
-
-                // Handle read receipts
-                if (message.content === 'read') {
-                    console.log('Processing read receipt:', message);
-                    dispatch(setMessageRead(message.id));
-                    return;
-                }
-
-                // Handle regular messages
-                if (!messageIdsRef.current.has(message.id)) {
-                    messageIdsRef.current.add(message.id);
-                    dispatch(addMessageAsync(message));
-
-                    // Send delivery confirmation
-                    if (wsRef.current && message.fromId !== currentUserId) {
-                        const deliveryConfirmation = {
-                            id: `delivery_${message.id}`,
-                            fromId: currentUserId,
-                            toId: message.fromId,
-                            content: 'delivered',
-                            timestamp: new Date().toISOString(),
-                            delivered: true,
-                            readStatus: false,
-                            status: 'sent'
-                        };
-                        wsRef.current.send(JSON.stringify(deliveryConfirmation));
-                    }
-                }
-            };
-
-            ws.onclose = (event) => {
-                setIsConnected(false);
-                console.log('WebSocket disconnected with code:', event.code);
-
-                // Don't retry if the close was clean
-                if (event.wasClean) {
-                    console.log('Clean websocket close');
-                    return;
-                }
-
-                // Attempt reconnection with exponential backoff
-                const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-                reconnectTimeout = setTimeout(() => {
-                    retryCount++;
-                    console.log(`Attempting reconnection ${retryCount}/${MAX_RETRIES}`);
-                    connectWebSocket();
-                }, delay);
-            };
-
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                // Don't set error state here as it will be handled by onclose
-            };
-        };
-
-        connectWebSocket();
-
-        // Cleanup function
+        document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => {
-            clearTimeout(reconnectTimeout);
-            if (wsRef.current) {
-                wsRef.current.close(1000, 'Component unmounting');
-            }
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [currentUserId, dispatch]);
+    }, [handleVisibilityChange]);
+
+    // Handle visibility changes for read receipts
+    useEffect(() => {
+        if (document.visibilityState === 'visible') {
+            handleVisibilityChange();
+        }
+    }, [handleVisibilityChange]);
 
     // Load initial messages
     useEffect(() => {
@@ -237,12 +110,46 @@ export const Chat = () => {
         loadMessages();
     }, [currentUserId, connectedToUser, dispatch]);
 
-    // Scroll to bottom effect
+    // Auto-scroll to bottom effect
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages]);
+
+    // Format timestamp for display
+    const formatTime = (timestamp: string) => {
+        return new Date(timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    // Handle message submission
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!messageText.trim() || !connectedToUser || !isConnected || !messageProcessor || !ws) return;
+
+        const message: Message = {
+            id: crypto.randomUUID(),
+            fromId: currentUserId!,
+            toId: connectedToUser,
+            content: messageText.trim(),
+            timestamp: new Date().toISOString(),
+            delivered: false,
+            readStatus: false,
+            status: 'sent'
+        };
+
+        try {
+            await messageProcessor.sendMessage(message);
+            setMessageText('');
+            setError(null);
+        } catch (error) {
+            console.error('Error sending message:', error);
+            setError('Failed to send message. Please try again.');
+        }
+    };
 
     return (
         <div className={styles.chatContainer}>
@@ -279,10 +186,10 @@ export const Chat = () => {
                                     {formatTime(message.timestamp)}
                                     {message.fromId === currentUserId && (
                                         <span className={styles.messageStatus}>
-                                 {message.status === 'read' ? '✓✓✓' :
-                               message.status === 'delivered' ? '✓✓' :
-                                 message.status === 'sent' ? '✓' : '✓'}
-                                    </span>
+                                            {message.status === 'read' ? '✓✓✓' :
+                                                message.status === 'delivered' ? '✓✓' :
+                                                    message.status === 'sent' ? '✓' : '✓'}
+                                        </span>
                                     )}
                                 </div>
                             </div>
@@ -293,6 +200,7 @@ export const Chat = () => {
             </div>
 
             <form onSubmit={handleSubmit} className={styles.inputForm}>
+                {error && <div className={styles.errorMessage}>{error}</div>}
                 <input
                     type="text"
                     value={messageText}
