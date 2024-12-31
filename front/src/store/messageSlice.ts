@@ -137,6 +137,14 @@ const messageSlice = createSlice({
             if (message) {
                 message.readStatus = true;
                 message.status = 'read';
+                message.delivered = true;  // Ensure delivered is also set when read
+            }
+            // Also check and update queued messages
+            const queuedMessage = state.messageQueue.pending.find(m => m.id === action.payload);
+            if (queuedMessage) {
+                queuedMessage.readStatus = true;
+                queuedMessage.status = 'read';
+                queuedMessage.delivered = true;
             }
         },
         clearChat(state) {

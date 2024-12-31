@@ -451,23 +451,30 @@ func deliverMessage(msg Message) bool {
 			return false
 		}
 
-		// Send delivery confirmation to sender
-		deliveryConfirmation := Message{
-			ID:        "delivery_" + msg.ID, // Use the original message ID
-			FromID:    msg.ToID,
-			ToID:      msg.FromID,
-			Content:   "delivered",
-			Timestamp: time.Now(),
-			Delivered: true,
-			Status:    "delivered", // Add status
+		// Send delivery confirmation to sender if this is a regular message
+		if msg.Content != "delivered" && msg.Content != "read" {
+			deliveryConfirmation := Message{
+				ID:        "delivery_" + msg.ID,
+				FromID:    msg.ToID,
+				ToID:      msg.FromID,
+				Content:   "delivered",
+				Timestamp: time.Now(),
+				Delivered: true,
+				Status:    "delivered",
+			}
+
+			clientsMux.RLock()
+			sender := clients[msg.FromID]
+			clientsMux.RUnlock()
+
+			if sender != nil {
+				sender.Conn.WriteJSON(deliveryConfirmation)
+			}
 		}
 
-		clientsMux.RLock()
-		sender := clients[msg.FromID]
-		clientsMux.RUnlock()
-
-		if sender != nil {
-			sender.Conn.WriteJSON(deliveryConfirmation)
+		// If this is a read receipt, update the message status in the database
+		if msg.Content == "read" {
+			updateMessageStatus(msg.ID, true, true)
 		}
 
 		return true

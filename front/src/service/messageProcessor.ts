@@ -118,7 +118,18 @@ export class MessageProcessor {
     }
 
     private async handleReadReceipt(message: Message): Promise<void> {
-        await this.dispatch(setMessageRead(message.id));
+        // Extract the original message ID if it's a read receipt
+        const targetMessageId = message.id.startsWith('read_')
+            ? message.id.replace('read_', '')
+            : message.id;
+
+        await this.dispatch(setMessageRead(targetMessageId));
+
+        // Clear delivery timeout if it exists
+        if (this.deliveryTimeouts.has(targetMessageId)) {
+            clearTimeout(this.deliveryTimeouts.get(targetMessageId));
+            this.deliveryTimeouts.delete(targetMessageId);
+        }
     }
 
     private async handleRegularMessage(message: Message): Promise<void> {

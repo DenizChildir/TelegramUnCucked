@@ -45,19 +45,47 @@ export const Chat = () => {
 
     // Handle message visibility and read status
     const handleVisibilityChange = useCallback(() => {
+        console.log('Visibility change detected:', document.visibilityState);
+
         if (document.visibilityState === 'visible') {
-            // Mark received messages as read when chat becomes visible
+            console.log('Chat became visible, checking for unread messages');
+
+            // Log the current state of messages
+            console.log('All conversation messages:', conversationMessages);
+
             const unreadMessages = conversationMessages
-                .filter(msg =>
-                    msg.fromId === connectedToUser &&
-                    !msg.readStatus &&
-                    msg.delivered
-                );
+                .filter(msg => {
+                    const isFromContact = msg.fromId === connectedToUser;
+                    const isUnread = !msg.readStatus && msg.status !== 'read';
+                    // Only check delivered status for outgoing messages
+                    const isDeliverable = msg.fromId === currentUserId ? msg.delivered : true;
+
+                    console.log('Message state:', JSON.stringify({
+                        messageId: msg.id,
+                        fromId: msg.fromId,
+                        toId: msg.toId,
+                        content: msg.content,
+                        delivered: msg.delivered,
+                        status: msg.status,
+                        readStatus: msg.readStatus,
+                        isFromContact,
+                        isUnread,
+                        isDeliverable,
+                        willPass: isFromContact && isUnread && isDeliverable,
+                        connectedUser: connectedToUser
+                    }, null, 2));
+
+                    return isFromContact && isUnread && isDeliverable;
+                });
+
+            console.log('Found unread messages:', unreadMessages.length);
 
             unreadMessages.forEach(msg => {
                 if (ws && messageProcessor) {
+                    console.log('Creating read receipt for message:', msg.id);
+
                     const readReceipt: Message = {
-                        id: msg.id,
+                        id: `read_${msg.id}`,
                         fromId: currentUserId!,
                         toId: msg.fromId,
                         content: 'read',
@@ -66,12 +94,19 @@ export const Chat = () => {
                         readStatus: true,
                         status: 'read'
                     };
+
+                    console.log('Sending read receipt:', readReceipt);
                     messageProcessor.sendMessage(readReceipt);
+                    dispatch(setMessageRead(msg.id));
+                } else {
+                    console.warn('WebSocket or MessageProcessor not available:', {
+                        wsAvailable: !!ws,
+                        processorAvailable: !!messageProcessor
+                    });
                 }
-                dispatch(setMessageRead(msg.id));
             });
         }
-    }, [dispatch, currentUserId, connectedToUser, conversationMessages]);
+    }, [dispatch, currentUserId, connectedToUser, conversationMessages, ws, messageProcessor]);
 
     // Initialize visibility change listener
     useEffect(() => {
@@ -185,11 +220,19 @@ export const Chat = () => {
                                 <div className={styles.messageTime}>
                                     {formatTime(message.timestamp)}
                                     {message.fromId === currentUserId && (
-                                        <span className={styles.messageStatus}>
-                                            {message.status === 'read' ? '✓✓✓' :
-                                                message.status === 'delivered' ? '✓✓' :
-                                                    message.status === 'sent' ? '✓' : '✓'}
-                                        </span>
+                                        <span className={styles.messageStatus} title={message.status}>
+        {(() => {
+            switch (message.status) {
+                case 'read':
+                    return '✓✓✓';
+                case 'delivered':
+                    return '✓✓';
+                case 'sent':
+                default:
+                    return '✓';
+            }
+        })()}
+    </span>
                                     )}
                                 </div>
                             </div>
