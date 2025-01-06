@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { setConnectedUser } from '../store/messageSlice';
 import { getRecentContacts, saveRecentContact, RecentContact } from '../store/fileStorage';
 import styles from '../styles/modules/ConnectUser.module.css';
+import {CONFIG} from "../config.ts";
 
 export const ConnectUser = () => {
     const dispatch = useAppDispatch();
@@ -39,8 +40,8 @@ export const ConnectUser = () => {
         setStatus(null);
 
         try {
-            // Verify user exists
-            const response = await fetch(`http://localhost:3000/status/${userId}`);
+            // Verify user exists using the config URL
+            const response = await fetch(CONFIG.API.getStatus(userId));
             if (!response.ok) throw new Error('User not found');
 
             // Save to recent contacts and update state

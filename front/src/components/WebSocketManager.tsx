@@ -7,7 +7,7 @@ import {
     removeFromQueue
 } from '../store/messageSlice';
 import { MessageProcessor } from '../service/messageProcessor';
-import { Message } from '../types/types';
+import { CONFIG } from '../config';
 
 interface WebSocketContextType {
     ws: WebSocket | null;
@@ -48,71 +48,95 @@ export const WebSocketManager: React.FC<WebSocketManagerProps> = ({ children }) 
     }, [dispatch, pendingMessages]);
 
     const connectWebSocket = useCallback(() => {
-        if (!currentUserId) return;
+        if (!currentUserId) {
+            console.log('No currentUserId, skipping connection');
+            return;
+        }
         if (retryCountRef.current >= MAX_RETRIES) {
-            console.error('Failed to connect after maximum retries');
+            console.log('Failed to connect after maximum retries');
             return;
         }
 
-        console.log('Attempting WebSocket connection...');
-        const ws = new WebSocket(`ws://localhost:3000/ws/${currentUserId}`);
-        wsRef.current = ws;
+        console.log('Starting WebSocket connection attempt...');
+        console.log('Current User ID:', currentUserId);
 
-        ws.onopen = () => {
-            console.log('WebSocket connected successfully');
-            dispatch(setWebSocketConnected(true));
-            retryCountRef.current = 0;
+        const wsUrl = CONFIG.getWebSocketUrl(currentUserId);
+        console.log('WebSocket URL:', wsUrl);
 
-            // Initialize message processor
-            messageProcessorRef.current = new MessageProcessor(
-                wsRef,
-                dispatch,
-                currentUserId
-            );
+        try {
+            console.log('Creating new WebSocket instance...');
+            const ws = new WebSocket(wsUrl);
+            wsRef.current = ws;
 
-            processPendingMessages();
-        };
+            console.log('Setting up WebSocket event handlers...');
 
-        ws.onmessage = async (event) => {
-            const message = JSON.parse(event.data);
-            console.log('Received message:', message);
+            ws.onopen = () => {
+                console.log('✅ WebSocket connection opened successfully');
+                dispatch(setWebSocketConnected(true));
+                retryCountRef.current = 0;
 
-            if (message.content === 'status_update') {
-                dispatch(setUserOnlineStatus({
-                    userId: message.fromId,
-                    online: message.status === 'online'
-                }));
-                return;
-            }
+                console.log('Initializing MessageProcessor...');
+                messageProcessorRef.current = new MessageProcessor(
+                    wsRef,
+                    dispatch,
+                    currentUserId
+                );
+                console.log('MessageProcessor initialized:', !!messageProcessorRef.current);
 
-            try {
-                await messageProcessorRef.current?.processIncomingMessage(message);
-            } catch (error) {
-                console.error('Error processing message:', error);
-            }
-        };
+                processPendingMessages();
+            };
 
-        ws.onclose = (event) => {
-            dispatch(setWebSocketConnected(false));
-            console.log('WebSocket disconnected with code:', event.code);
+            ws.onclose = (event) => {
+                console.log('❌ WebSocket closed. Code:', event.code, 'Reason:', event.reason);
+                dispatch(setWebSocketConnected(false));
 
-            if (event.wasClean) {
-                console.log('Clean websocket close');
-                return;
-            }
+                if (event.wasClean) {
+                    console.log('Clean websocket close');
+                    return;
+                }
 
-            // Attempt reconnection with exponential backoff
-            const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
-            reconnectTimeoutRef.current = setTimeout(() => {
-                retryCountRef.current++;
-                console.log(`Attempting reconnection ${retryCountRef.current}/${MAX_RETRIES}`);
-                connectWebSocket();
-            }, delay);
-        };
+                const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
+                console.log(`Scheduling reconnection attempt in ${delay}ms...`);
+                reconnectTimeoutRef.current = setTimeout(() => {
+                    retryCountRef.current++;
+                    console.log(`Attempting reconnection ${retryCountRef.current}/${MAX_RETRIES}`);
+                    connectWebSocket();
+                }, delay);
+            };
 
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
+            ws.onerror = (error) => {
+                console.error('⚠️ WebSocket error:', error);
+                console.log('WebSocket readyState:', ws.readyState);
+            };
+
+            ws.onmessage = async (event) => {
+                console.log('📩 Received WebSocket message:', event.data);
+                try {
+                    const message = JSON.parse(event.data);
+                    console.log('Parsed message:', message);
+
+                    if (message.content === 'status_update') {
+                        console.log('Processing status update message');
+                        dispatch(setUserOnlineStatus({
+                            userId: message.fromId,
+                            online: message.status === 'online'
+                        }));
+                        return;
+                    }
+
+                    if (messageProcessorRef.current) {
+                        console.log('Passing message to MessageProcessor');
+                        await messageProcessorRef.current.processIncomingMessage(message);
+                    } else {
+                        console.warn('MessageProcessor not available for message processing');
+                    }
+                } catch (error) {
+                    console.error('Error processing message:', error);
+                }
+            };
+        } catch (error) {
+            console.error('Error creating WebSocket:', error);
+        }
     }, [currentUserId, dispatch, processPendingMessages]);
 
     useEffect(() => {
@@ -130,6 +154,7 @@ export const WebSocketManager: React.FC<WebSocketManagerProps> = ({ children }) 
             if (messageProcessorRef.current) {
                 messageProcessorRef.current.clearDeliveryTimeouts();
             }
+            messageProcessorRef.current = null;
         };
     }, [currentUserId, connectWebSocket]);
 

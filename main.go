@@ -5,6 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"log"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 
@@ -40,38 +41,40 @@ var (
 )
 
 func main() {
-	// Initialize SQLite database
+	log.Printf("🚀 Starting server initialization...")
+
 	initDB()
 
 	app := fiber.New()
 
-	// Add CORS middleware with more permissive settings
+	// CORS
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*", // Allow all origins for development
-		AllowHeaders: "Origin, Content-Type, Accept",
-		AllowMethods: "GET, POST, HEAD, PUT, DELETE, PATCH",
+		AllowOrigins: "*",
+		AllowHeaders: "*",
+		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 	}))
 
-	// Routes
-	app.Use("/ws/:id", func(c *fiber.Ctx) error {
-		log.Printf("Received WebSocket connection request from user: %s", c.Params("id"))
-		if websocket.IsWebSocketUpgrade(c) {
-			log.Printf("WebSocket upgrade requested for user: %s", c.Params("id"))
-			c.Locals("allowed", true)
-			return c.Next()
-		}
-		log.Printf("Non-WebSocket request received on WebSocket endpoint for user: %s", c.Params("id"))
-		return fiber.ErrUpgradeRequired
+	// Simple test endpoint
+	app.Get("/ping", func(c *fiber.Ctx) error {
+		return c.SendString("pong")
 	})
 
-	app.Get("/ws/:id", websocket.New(handleWebSocket))
-	app.Get("/generate-id", handleGenerateID)
-	app.Get("/status/:id", handleUserStatus)
-	app.Get("/messages/:userId", handleGetAllMessages)
-	app.Delete("/messages/:userId/:contactId", handleDeleteMessages)
+	// WebSocket route
+	app.Get("/ws/:id", websocket.New(func(c *websocket.Conn) {
+		userID := c.Params("id")
+		log.Printf("New WebSocket connection attempt from user: %s", userID)
 
-	log.Printf("Server starting on :3000")
-	log.Fatal(app.Listen(":3000"))
+		// Use your existing handleWebSocket function
+		handleWebSocket(c)
+	}))
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+
+	log.Printf("Server starting on port %s", port)
+	log.Fatal(app.Listen(":" + port))
 }
 
 func initDB() {
@@ -205,7 +208,7 @@ func handleUserStatus(c *fiber.Ctx) error {
 
 func handleWebSocket(c *websocket.Conn) {
 	userID := c.Params("id")
-	log.Printf("New WebSocket connection established for user: %s", userID)
+	log.Printf("👤 New WebSocket connection established for user: %s", userID)
 
 	// Register new client
 	client := &Client{
@@ -216,19 +219,19 @@ func handleWebSocket(c *websocket.Conn) {
 
 	clientsMux.Lock()
 	clients[userID] = client
-	log.Printf("Registered client. Total connected clients: %d", len(clients))
+	log.Printf("✅ Registered client. Total connected clients: %d", len(clients))
 	clientsMux.Unlock()
 
 	// Broadcast that user is online
-	log.Printf("Broadcasting online status for user: %s", userID)
+	log.Printf("📢 Broadcasting online status for user: %s", userID)
 	broadcastUserStatus(userID, true)
 
 	// Send all messages
-	log.Printf("Sending all messages for user: %s", userID)
+	log.Printf("📨 Sending all messages for user: %s", userID)
 	sendAllMessages(userID)
 
 	// Send current online users status
-	log.Printf("Sending online users status to user: %s", userID)
+	log.Printf("👥 Sending online users status to user: %s", userID)
 	sendCurrentOnlineUsers(client)
 
 	// WebSocket message handling loop
@@ -236,58 +239,73 @@ func handleWebSocket(c *websocket.Conn) {
 		var msg Message
 		err := c.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("Error reading message: %v", err)
+			log.Printf("❌ Error reading message: %v", err)
 			break
 		}
 
 		// Ensure timestamp is set
 		if msg.Timestamp.IsZero() {
 			msg.Timestamp = time.Now()
+			log.Printf("⏰ Set timestamp for message: %s", msg.ID)
 		}
 
 		// Ensure status is set
 		if msg.Status == "" {
 			msg.Status = "sent"
+			log.Printf("📝 Set default status for message: %s", msg.ID)
 		}
+
+		log.Printf("📩 Received message - ID: %s, From: %s, To: %s, Content: %s, Status: %s",
+			msg.ID, msg.FromID, msg.ToID, msg.Content, msg.Status)
 
 		switch msg.Content {
 		case "delivered":
-			// Handle delivery confirmation
+			log.Printf("📬 Processing delivery confirmation for message: %s", msg.ID)
 			updateMessageStatus(msg.ToID, true, false)
 			msg.Status = "delivered"
 			delivered := deliverMessage(msg)
 			if !delivered {
+				log.Printf("💾 Storing undelivered confirmation message: %s", msg.ID)
 				storeMessage(msg)
 			}
+
 		case "read":
-			// Handle read receipt
+			log.Printf("👀 Processing read receipt for message: %s", msg.ID)
 			updateMessageStatus(msg.ToID, true, true)
 			msg.Status = "read"
 			delivered := deliverMessage(msg)
 			if !delivered {
+				log.Printf("💾 Storing undelivered read receipt: %s", msg.ID)
 				storeMessage(msg)
 			}
+
 		default:
+			log.Printf("💬 Processing regular message: %s", msg.ID)
 			delivered := deliverMessage(msg)
 			if !delivered {
+				log.Printf("💾 Storing undelivered message: %s", msg.ID)
 				storeMessage(msg)
 			}
 		}
 	}
 
 	// Cleanup when connection closes
+	log.Printf("👋 Connection closing for user: %s", userID)
 	clientsMux.Lock()
 	if client, exists := clients[userID]; exists {
 		client.IsOnline = false
 		delete(clients, userID)
+		log.Printf("✅ Client removed from active clients. Remaining clients: %d", len(clients))
 	}
 	clientsMux.Unlock()
 
 	// Broadcast that user is offline
+	log.Printf("📢 Broadcasting offline status for user: %s", userID)
 	broadcastUserStatus(userID, false)
 }
-
 func broadcastUserStatus(userID string, online bool) {
+	log.Printf("Broadcasting status for user %s: %v", userID, online)
+
 	statusMsg := Message{
 		ID:      "status_" + userID,
 		Content: "status_update",
@@ -299,13 +317,39 @@ func broadcastUserStatus(userID string, online bool) {
 	defer clientsMux.RUnlock()
 
 	// Broadcast to all connected clients except the user themselves
-	for _, client := range clients {
-		if client.IsOnline && client.ID != userID {
-			client.Conn.WriteJSON(statusMsg)
+	for id, client := range clients {
+		if client.IsOnline && id != userID {
+			log.Printf("Sending status update to user %s", id)
+			err := client.Conn.WriteJSON(statusMsg)
+			if err != nil {
+				log.Printf("Error sending status to %s: %v", id, err)
+			}
 		}
 	}
 }
 
+func sendCurrentOnlineUsers(newClient *Client) {
+	log.Printf("Sending current online users to %s", newClient.ID)
+
+	clientsMux.RLock()
+	defer clientsMux.RUnlock()
+
+	// Send status of all online users to the new client
+	for clientID, client := range clients {
+		if client.IsOnline && clientID != newClient.ID {
+			statusMsg := Message{
+				ID:      "status_" + clientID,
+				Content: "status_update",
+				FromID:  clientID,
+				Status:  "online",
+			}
+			err := newClient.Conn.WriteJSON(statusMsg)
+			if err != nil {
+				log.Printf("Error sending online status of %s: %v", clientID, err)
+			}
+		}
+	}
+}
 func sendAllMessages(userID string) {
 	query := `
     SELECT id, from_id, to_id, content, timestamp, delivered, read_status
@@ -409,23 +453,6 @@ func sendAllMessages(userID string) {
 	}
 }
 
-func sendCurrentOnlineUsers(newClient *Client) {
-	clientsMux.RLock()
-	defer clientsMux.RUnlock()
-
-	// Send status of all online users to the new client
-	for clientID, client := range clients {
-		if client.IsOnline && clientID != newClient.ID {
-			statusMsg := Message{
-				ID:      "status_" + clientID,
-				Content: "status_update",
-				FromID:  clientID,
-				Status:  "online",
-			}
-			newClient.Conn.WriteJSON(statusMsg)
-		}
-	}
-}
 func updateMessageStatus(messageID string, delivered bool, read bool) {
 	query := `
     UPDATE messages 
