@@ -2,11 +2,11 @@
 export const CONFIG = {
     // Server configuration
     SERVER: {
-        // Use localhost for initial testing
-        HOST: 'localhost',
-        PORT: '3000',
-        PROTOCOL: 'http',
-        WS_PROTOCOL: 'ws',
+        // Since we're using Vite's proxy, we use the relative path
+        HOST: window.location.hostname,  // This will resolve correctly through the proxy
+        PORT: window.location.port,      // This will be the Vite port
+        PROTOCOL: window.location.protocol.replace(':', ''),
+        WS_PROTOCOL: window.location.protocol === 'https:' ? 'wss' : 'ws',
     },
 
     // Derive full URLs
@@ -15,16 +15,16 @@ export const CONFIG = {
     },
 
     getWebSocketUrl: (userId: string) => {
-        const wsUrl = `${CONFIG.SERVER.WS_PROTOCOL}://${CONFIG.SERVER.HOST}:${CONFIG.SERVER.PORT}/ws/${userId}`;
-        console.log('Generated WebSocket URL:', wsUrl);
-        return wsUrl;
+        // Use relative path since we're proxying
+        return `${CONFIG.SERVER.WS_PROTOCOL}://${CONFIG.SERVER.HOST}:${CONFIG.SERVER.PORT}/ws/${userId}`;
     },
 
     // API endpoints
     API: {
-        getStatus: (userId: string) => `${CONFIG.getBaseUrl()}/status/${userId}`,
-        getMessages: (userId: string) => `${CONFIG.getBaseUrl()}/messages/${userId}`,
+        // Use relative paths since we're proxying
+        getStatus: (userId: string) => `/status/${userId}`,
+        getMessages: (userId: string) => `/messages/${userId}`,
         deleteMessages: (userId: string, contactId: string) =>
-            `${CONFIG.getBaseUrl()}/messages/${userId}/${contactId}`,
+            `/messages/${userId}/${contactId}`,
     }
 };
